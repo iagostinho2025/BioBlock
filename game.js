@@ -17,6 +17,9 @@ export class Game {
         this.collected = { bee: 0, ghost: 0, cop: 0 };
         this.score = 0;
         
+        // Estado de Drag & Drop
+        this.activeSnap = null; // { r, c, valid }
+        
         this.init();
     }
 
@@ -50,10 +53,8 @@ export class Game {
                 div.dataset.r = rIndex;
                 div.dataset.c = cIndex;
                 
-                // Se existe dado salvo nesta célula
                 if (cellData) {
                     div.classList.add('filled');
-                    // Se o dado for um item, exibe o emoji
                     if (cellData.type === 'ITEM') {
                         div.innerText = cellData.emoji;
                     }
@@ -63,7 +64,8 @@ export class Game {
         });
     }
 
-    // --- SPAWN COM SLOTS ---
+    // --- SISTEMA DE DRAG & DROP PREMIUM ---
+
     spawnNewHand() {
         this.dockEl.innerHTML = '';
         this.currentHand = [getRandomPiece(), getRandomPiece(), getRandomPiece()];
@@ -76,29 +78,25 @@ export class Game {
         });
 
         setTimeout(() => {
-             if (this.checkMovesAvailable && !this.checkMovesAvailable()) {
+             if (!this.checkMovesAvailable()) {
                 this.gameOver();
              }
         }, 100);
     }
 
-    // --- CRIAÇÃO DA PEÇA VISUAL (Lendo o Layout) ---
     createDraggablePiece(piece, index, parentContainer) {
         const container = document.createElement('div');
         container.classList.add('draggable-piece');
         container.dataset.index = index;
         
+        // Configura grid interno da peça
         container.style.gridTemplateColumns = `repeat(${piece.matrix[0].length}, 1fr)`;
         
-        // Iteramos sobre o layout gerado no shapes.js
         piece.layout.forEach(row => {
             row.forEach(cellData => {
                 const block = document.createElement('div');
-                
-                if (cellData) { // Se não for null (espaço vazio)
+                if (cellData) {
                     block.classList.add('block-unit');
-                    
-                    // Se esse bloco específico tiver um item
                     if (cellData.type === 'ITEM') {
                         block.innerText = cellData.emoji;
                     }
@@ -116,83 +114,100 @@ export class Game {
     attachDragEvents(el, piece) {
         let isDragging = false;
         let clone = null;
-        let startX, startY;
+        let touchOffsetX = 0;
+        let touchOffsetY = 0;
+
+        // Dimensões do grid para cálculos
+        let cellPixelSize = 0;
+        let boardRect = null;
 
         const onStart = (e) => {
             if (isDragging) return;
             isDragging = true;
+            this.activeSnap = null;
+            
+            // Prepara métricas do tabuleiro
+            boardRect = this.boardEl.getBoundingClientRect();
+            // Calcula tamanho da célula baseado na largura atual do tabuleiro
+            cellPixelSize = boardRect.width / this.gridSize;
             
             const touch = e.touches ? e.touches[0] : e;
             const rect = el.getBoundingClientRect();
             
-            // Clone Visual
+            // Calcula onde o dedo tocou relativo ao centro da peça
+            touchOffsetX = touch.clientX - (rect.left + rect.width / 2);
+            touchOffsetY = touch.clientY - (rect.top + rect.height / 2);
+
+            // Cria o clone visual (Ghost Piece que segue o dedo)
             clone = el.cloneNode(true);
             clone.classList.add('dragging-active');
             
-            // Configura Grid do Clone
-            const gridCellSize = this.boardEl.children[0].getBoundingClientRect().width;
+            // Configura o clone para ter o tamanho exato que terá no grid
             clone.style.display = 'grid';
-            clone.style.gridTemplateColumns = `repeat(${piece.matrix[0].length}, ${gridCellSize}px)`;
-            clone.style.gap = '4px'; 
+            clone.style.width = (piece.matrix[0].length * cellPixelSize) + 'px';
+            clone.style.height = (piece.matrix.length * cellPixelSize) + 'px';
+            clone.style.gridTemplateColumns = `repeat(${piece.matrix[0].length}, 1fr)`;
+            clone.style.gap = '4px'; // Match CSS gap do board
             
-            // Ajusta filhos
+            // Ajusta filhos do clone
             Array.from(clone.children).forEach(child => {
-                 child.style.width = gridCellSize + 'px';
-                 child.style.height = gridCellSize + 'px';
-                 child.style.display = 'flex';
-                 child.style.justifyContent = 'center';
-                 child.style.alignItems = 'center';
-                 // Aumenta fonte se tiver emoji
+                 child.style.width = '100%';
+                 child.style.height = '100%';
                  if(child.innerText) child.style.fontSize = '24px';
             });
 
-            clone.style.left = (touch.clientX - (rect.width/2)) + 'px';
-            clone.style.top = (touch.clientY - (rect.height/2)) + 'px';
+            // Posiciona inicialmente
+            this.moveClone(clone, touch.clientX, touch.clientY, touchOffsetX, touchOffsetY);
             
             document.body.appendChild(clone);
-            el.style.opacity = '0';
+            el.style.opacity = '0'; // Esconde original
         };
 
         const onMove = (e) => {
             if (!isDragging || !clone) return;
-            e.preventDefault();
+            e.preventDefault(); // Evita scroll
 
             const touch = e.touches ? e.touches[0] : e;
-            const cloneWidth = clone.offsetWidth;
-            const cloneHeight = clone.offsetHeight;
             
-            const x = touch.clientX - (cloneWidth / 2);
-            const y = touch.clientY - (cloneHeight / 2) - 80;
-            
-            clone.style.left = x + 'px';
-            clone.style.top = y + 'px';
+            // Move o clone
+            this.moveClone(clone, touch.clientX, touch.clientY, touchOffsetX, touchOffsetY);
 
-            this.handlePreview(touch.clientX, touch.clientY, piece);
+            // Lógica de Snapping e Preview
+            this.updateGhostPreview(clone, boardRect, cellPixelSize, piece);
         };
 
         const onEnd = (e) => {
             if (!isDragging) return;
             isDragging = false;
 
-            const touch = e.changedTouches ? e.changedTouches[0] : e;
-            const placed = this.tryPlacePiece(touch.clientX, touch.clientY, piece);
+            // Tenta colocar na posição do snap ativo
+            let placed = false;
+            
+            if (this.activeSnap && this.activeSnap.valid) {
+                placed = this.placePiece(this.activeSnap.r, this.activeSnap.c, piece);
+            }
 
             if (placed) {
-                el.remove();
-                this.checkLines();
+                el.remove(); // Remove do dock
+                this.checkLines(); 
                 
+                // Verifica estado do jogo
                 const remainingPieces = this.dockEl.querySelectorAll('.draggable-piece');
                 if (remainingPieces.length === 0) {
                     this.spawnNewHand();
-                } else if (!this.checkMovesAvailable()) {
-                    this.gameOver();
+                } else {
+                    if (!this.checkMovesAvailable()) {
+                        this.gameOver();
+                    }
                 }
             } else {
+                // Animação de retorno (opcional) ou apenas reaparece
                 el.style.opacity = '1';
             }
 
             if (clone) clone.remove();
-            this.clearPreview();
+            this.clearGhostPreview();
+            this.activeSnap = null;
         };
 
         el.addEventListener('mousedown', onStart);
@@ -203,82 +218,148 @@ export class Game {
         window.addEventListener('touchend', onEnd);
     }
 
-    getGridCellFromPoint(x, y) {
-        const elements = document.elementsFromPoint(x, y - 50); 
-        const cell = elements.find(el => el.classList.contains('cell'));
-        if (cell) return { r: parseInt(cell.dataset.r), c: parseInt(cell.dataset.c) };
-        return null;
+    moveClone(clone, clientX, clientY, offsetX, offsetY) {
+        // Offset Y de -80px para que o dedo não cubra a peça
+        const VISUAL_OFFSET_Y = 80;
+        
+        const x = clientX - (clone.offsetWidth / 2); // Centraliza horizontalmente no dedo
+        const y = clientY - (clone.offsetHeight / 2) - VISUAL_OFFSET_Y; 
+
+        clone.style.left = x + 'px';
+        clone.style.top = y + 'px';
     }
 
-    handlePreview(x, y, piece) {
-        this.clearPreview();
-        const startPos = this.getGridCellFromPoint(x, y);
-        if (!startPos) return;
+    // --- CORE DO SISTEMA DE SNAPPING ---
+    
+    updateGhostPreview(clone, boardRect, cellSize, piece) {
+        this.clearGhostPreview();
 
-        if (this.canPlace(startPos.r, startPos.c, piece)) {
-            this.drawPreview(startPos.r, startPos.c, piece);
+        // 1. Obtém a posição central do clone visual
+        const cloneRect = clone.getBoundingClientRect();
+        const cloneCenterX = cloneRect.left + cloneRect.width / 2;
+        const cloneCenterY = cloneRect.top + cloneRect.height / 2;
+
+        // 2. Projeta essa posição no sistema de coordenadas do grid
+        // Subtraímos metade do tamanho da peça (em células) para achar o topo-esquerda
+        const relativeX = cloneCenterX - boardRect.left;
+        const relativeY = cloneCenterY - boardRect.top;
+
+        const pieceCols = piece.matrix[0].length;
+        const pieceRows = piece.matrix.length;
+
+        // Coordenada flutuante (ex: 3.4) do topo-esquerda da peça no grid
+        const exactCol = (relativeX / cellSize) - (pieceCols / 2);
+        const exactRow = (relativeY / cellSize) - (pieceRows / 2);
+
+        // 3. Arredonda para o inteiro mais próximo (Snap Básico)
+        const baseR = Math.round(exactRow);
+        const baseC = Math.round(exactCol);
+
+        // 4. Algoritmo "Best Fit": Procura vizinhos se a posição base for inválida
+        // Isso ajuda quando o usuário solta "entre" dois blocos
+        const candidates = [
+            { r: baseR, c: baseC },
+            { r: baseR + 1, c: baseC },
+            { r: baseR - 1, c: baseC },
+            { r: baseR, c: baseC + 1 },
+            { r: baseR, c: baseC - 1 }
+        ];
+
+        let bestMatch = null;
+        let minDistance = Infinity;
+
+        // Filtra candidatos válidos e escolhe o mais próximo
+        for (const cand of candidates) {
+            const isValid = this.canPlace(cand.r, cand.c, piece);
+            
+            // Distância Euclidiana entre o ponto exato do mouse e o centro deste candidato
+            const dist = Math.sqrt(Math.pow(cand.r - exactRow, 2) + Math.pow(cand.c - exactCol, 2));
+
+            // Prioriza posições válidas
+            if (isValid) {
+                // Se achamos um válido, ignoramos inválidos anteriores
+                if (!bestMatch || !bestMatch.valid || dist < minDistance) {
+                    bestMatch = { r: cand.r, c: cand.c, valid: true };
+                    minDistance = dist;
+                }
+            } else if (!bestMatch && dist < 1.0) { 
+                // Se ainda não temos nada, guardamos esse inválido se estiver perto o suficiente
+                // para mostrar feedback vermelho
+                bestMatch = { r: cand.r, c: cand.c, valid: false };
+            }
+        }
+
+        // Se encontrou algo razoável (dentro do tabuleiro ou perto dele)
+        if (bestMatch) {
+            this.activeSnap = bestMatch;
+            this.drawGhost(bestMatch.r, bestMatch.c, piece, bestMatch.valid);
+        } else {
+            this.activeSnap = null;
         }
     }
 
-    canPlace(r, c, piece) {
-        const rOffset = Math.floor(piece.matrix.length / 2);
-        const cOffset = Math.floor(piece.matrix[0].length / 2);
-        const startR = r - rOffset;
-        const startC = c - cOffset;
-
+    drawGhost(r, c, piece, isValid) {
+        const className = isValid ? 'ghost-valid' : 'ghost-invalid';
+        
         for (let i = 0; i < piece.matrix.length; i++) {
             for (let j = 0; j < piece.matrix[i].length; j++) {
-                if (piece.matrix[i][j] === 1) { // Verifica geometria
-                    const targetR = startR + i;
-                    const targetC = startC + j;
+                if (piece.matrix[i][j] === 1) {
+                    const targetR = r + i;
+                    const targetC = c + j;
+                    
+                    // Verifica limites antes de desenhar
+                    if (targetR >= 0 && targetR < this.gridSize && targetC >= 0 && targetC < this.gridSize) {
+                        const cellIndex = targetR * 8 + targetC;
+                        const cell = this.boardEl.children[cellIndex];
+                        if (cell) {
+                            cell.classList.add('ghost', className);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    clearGhostPreview() {
+        const ghosts = this.boardEl.querySelectorAll('.ghost');
+        ghosts.forEach(el => el.classList.remove('ghost', 'ghost-valid', 'ghost-invalid'));
+    }
+
+    // --- LÓGICA DO JOGO ---
+
+    canPlace(r, c, piece) {
+        for (let i = 0; i < piece.matrix.length; i++) {
+            for (let j = 0; j < piece.matrix[i].length; j++) {
+                if (piece.matrix[i][j] === 1) { 
+                    const targetR = r + i;
+                    const targetC = c + j;
+                    // Fora do grid
                     if (targetR < 0 || targetR >= this.gridSize || targetC < 0 || targetC >= this.gridSize) return false;
+                    // Já ocupado
                     if (this.grid[targetR][targetC] !== null) return false;
                 }
             }
         }
-        return { startR, startC }; 
+        return true;
     }
 
-    drawPreview(r, c, piece) {
-        const coords = this.canPlace(r, c, piece);
-        if(!coords) return;
+    placePiece(r, c, piece) {
+        if (!this.canPlace(r, c, piece)) return false;
 
-        for (let i = 0; i < piece.matrix.length; i++) {
-            for (let j = 0; j < piece.matrix[i].length; j++) {
-                if (piece.matrix[i][j] === 1) {
-                    const cell = this.boardEl.children[(coords.startR + i) * 8 + (coords.startC + j)];
-                    if(cell) cell.classList.add('preview');
-                }
-            }
-        }
-    }
-
-    clearPreview() {
-        document.querySelectorAll('.preview').forEach(el => el.classList.remove('preview'));
-    }
-
-    tryPlacePiece(x, y, piece) {
-        const startPos = this.getGridCellFromPoint(x, y);
-        if (!startPos) return false;
-
-        const coords = this.canPlace(startPos.r, startPos.c, piece);
-        if (!coords) return false;
-
-        // Commit: Salvar o conteúdo específico de cada quadrado no grid
         for (let i = 0; i < piece.layout.length; i++) {
             for (let j = 0; j < piece.layout[i].length; j++) {
                 const cellData = piece.layout[i][j];
-                
-                if (cellData) { // Se tem bloco nessa posição
-                    const r = coords.startR + i;
-                    const c = coords.startC + j;
+                if (cellData) { 
+                    const targetR = r + i;
+                    const targetC = c + j;
                     
-                    // Salva o objeto completo (NORMAL ou ITEM)
-                    this.grid[r][c] = cellData;
+                    this.grid[targetR][targetC] = cellData;
                     
-                    // Atualiza visual
-                    const cellEl = this.boardEl.children[r * 8 + c];
+                    const cellEl = this.boardEl.children[targetR * 8 + targetC];
                     cellEl.classList.add('filled');
+                    // Aplica classe de cor baseada no tipo de item se quiser, ou genérico
+                    // cellEl.classList.add('placed-animation'); // Ideia para futuro
+                    
                     if (cellData.type === 'ITEM') {
                         cellEl.innerText = cellData.emoji;
                     }
@@ -291,7 +372,7 @@ export class Game {
     checkLines() {
         let linesCleared = 0;
         
-        // Check Rows
+        // Verifica Linhas
         for (let r = 0; r < this.gridSize; r++) {
             if (this.grid[r].every(val => val !== null)) {
                 this.clearRow(r);
@@ -299,7 +380,7 @@ export class Game {
             }
         }
         
-        // Check Cols
+        // Verifica Colunas
         for (let c = 0; c < this.gridSize; c++) {
             let full = true;
             for (let r = 0; r < this.gridSize; r++) {
@@ -312,7 +393,8 @@ export class Game {
         }
 
         if (linesCleared > 0) {
-            this.renderGrid(); // Redesenha para limpar
+            // Pequeno delay para animação se quiser implementar depois
+            this.renderGrid(); 
         }
     }
 
@@ -333,9 +415,8 @@ export class Game {
     }
 
     collectItem(cellData) {
-        // Só conta se for do tipo ITEM
         if (cellData && cellData.type === 'ITEM') {
-            const key = cellData.key.toLowerCase(); // bee, ghost, cop
+            const key = cellData.key.toLowerCase(); 
             if (this.collected[key] !== undefined) {
                 this.collected[key]++;
                 this.updateGoalsUI();
@@ -362,7 +443,21 @@ export class Game {
     }
 
     checkMovesAvailable() {
-        return true; 
+        const remainingPiecesEls = this.dockEl.querySelectorAll('.draggable-piece');
+        if (remainingPiecesEls.length === 0) return true;
+
+        for (const el of remainingPiecesEls) {
+            const index = el.dataset.index;
+            const piece = this.currentHand[index];
+            if (!piece) continue;
+
+            for (let r = 0; r < this.gridSize; r++) {
+                for (let c = 0; c < this.gridSize; c++) {
+                    if (this.canPlace(r, c, piece)) return true;
+                }
+            }
+        }
+        return false; 
     }
 
     gameOver() {

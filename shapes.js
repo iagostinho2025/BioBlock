@@ -19,20 +19,21 @@ export const ITEMS = {
 };
 
 export function getRandomPiece() {
-    // 1. Escolhe o formato geométrico
+    // 1. Escolhe a forma
     const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
     
-    // 2. Gera o layout de conteúdo (Onde vai ter emoji?)
-    // Vamos clonar a matriz da forma para preencher com itens
+    // 2. Gera o layout de conteúdo (Sorteio dos Emojis)
     const layout = shape.matrix.map(row => row.map(val => {
         if (val === 0) return null; // Espaço vazio da matriz
         
-        // Se val === 1 (é um bloco), vamos rolar os dados:
-        // 20% de chance de ter um item, 80% de ser cinza normal
-        const chance = Math.random();
+        // --- CONFIGURAÇÃO DE DIFICULDADE ---
+        // Antes estava 0.20 (20%). Aumentei para 0.50 (50%).
+        // Para deixar mais difícil no futuro, diminua este valor.
+        const ITEM_CHANCE = 0.50; 
         
-        if (chance < 0.20) { 
-            // Sorteia qual item
+        // Rola os dados
+        if (Math.random() < ITEM_CHANCE) { 
+            // Sorteia qual item (Abelha, Fantasma ou Polícia)
             const keys = ['BEE', 'GHOST', 'COP'];
             const randomKey = keys[Math.floor(Math.random() * keys.length)];
             return { type: 'ITEM', key: randomKey, emoji: ITEMS[randomKey] };
@@ -44,7 +45,7 @@ export function getRandomPiece() {
     
     return { 
         ...shape, 
-        layout: layout, // Carrega a informação de cada quadradinho
+        layout: layout, 
         id: Date.now() + Math.random() 
     };
 }

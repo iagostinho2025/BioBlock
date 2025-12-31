@@ -10,6 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
     
     <link rel="stylesheet" href="style.css">
+    
     <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -20,23 +21,25 @@
             <header class="game-header">
                 <h1 class="logo">BioBlock</h1>
                 <div class="goals-container">
-                    <div class="goal-item" data-type="blue">
-                        <div class="goal-circle blue-glow">
-                            <span id="goal-blue">0/5</span>
+                    <div class="goal-item" id="goal-item-bee">
+                        <div class="goal-circle">
+                            <span id="goal-bee">0/10</span>
                         </div>
-                        <span class="goal-label">Soro Azul</span>
+                        <span class="goal-label">🐝 Abelha</span>
                     </div>
-                    <div class="goal-item" data-type="pink">
-                        <div class="goal-circle pink-glow">
-                            <span id="goal-pink">0/5</span>
+
+                    <div class="goal-item" id="goal-item-ghost">
+                        <div class="goal-circle">
+                            <span id="goal-ghost">0/10</span>
                         </div>
-                        <span class="goal-label">Soro Rosa</span>
+                        <span class="goal-label">👻 Fantasma</span>
                     </div>
-                    <div class="goal-item" data-type="green">
-                        <div class="goal-circle green-glow">
-                            <span id="goal-green">0/5</span>
+
+                    <div class="goal-item" id="goal-item-cop">
+                        <div class="goal-circle">
+                            <span id="goal-cop">0/10</span>
                         </div>
-                        <span class="goal-label">Soro Verde</span>
+                        <span class="goal-label">👮 Polícia</span>
                     </div>
                 </div>
             </header>
@@ -54,10 +57,10 @@
 
         <div id="modal-gameover" class="modal hidden">
             <div class="modal-content glass-panel">
-                <h2>Amostras Insuficientes</h2>
-                <p>O laboratório ficou sem espaço.</p>
+                <h2>Experimento Encerrado</h2>
+                <p>O laboratório ficou sem espaço para novas amostras.</p>
                 <div class="score-display">
-                    <span>Pontuação Final:</span>
+                    <span>Total Coletado:</span>
                     <strong id="final-score">0</strong>
                 </div>
                 <button id="btn-restart" class="btn-primary">Reiniciar Experimento</button>
@@ -66,5 +69,15 @@
     </div>
 
     <script type="module" src="app.js"></script>
+    
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./service-worker.js')
+                    .then(reg => console.log('SW registrado'))
+                    .catch(err => console.log('SW falhou', err));
+            });
+        }
+    </script>
 </body>
 </html>
