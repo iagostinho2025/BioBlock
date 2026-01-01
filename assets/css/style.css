@@ -808,25 +808,28 @@ body.theme-fire .block-unit.type-normal {
     100% { box-shadow: inset 0 0 25px #f87171; background-color: #7f1d1d; }
 }
 /* =========================================
-   12. NOVO DESIGN DE MENU (VERSÃO LOGO)
+   12. NOVO DESIGN DE MENU (ALINHAMENTO FINAL)
    ========================================= */
 
 /* Layout Geral da Home */
 .home-layout {
     display: flex; flex-direction: column;
-    padding: 20px 24px;
-    gap: 15px; /* Reduzi um pouco para caber a logo */
+    padding: 10px 24px 20px 24px; /* Reduzi padding topo para 10px */
+    gap: 0; /* Removi o gap para controlar na margem negativa */
     background: var(--bg-app);
+    justify-content: flex-start;
 }
 
 /* --- HEADER SUPERIOR --- */
 .home-header {
     display: flex; justify-content: space-between; align-items: center;
-    padding-top: 10px; padding-bottom: 10px;
+    padding-bottom: 5px;
     width: 100%;
+    flex-shrink: 0;
+    z-index: 20; /* Garante que fique acima da logo se ela crescer demais */
 }
 
-/* Botão Menu (Quadrado Arredondado Escuro) */
+/* Botão Menu */
 .btn-round-icon {
     width: 45px; height: 45px; border-radius: 12px;
     background: #1e293b; 
@@ -849,34 +852,55 @@ body.theme-fire .block-unit.type-normal {
 .crystal-icon { font-size: 1rem; }
 .crystal-value { color: #fbbf24; font-weight: 700; font-size: 1rem; }
 
-/* --- LOGO PRINCIPAL (CENTRO) --- */
+/* --- LOGO PRINCIPAL (AJUSTE DE POSIÇÃO) --- */
 .home-logo-section {
     display: flex; justify-content: center; align-items: center;
-    padding: 10px 0;
-    flex: 1; /* Ocupa o espaço livre verticalmente */
-    max-height: 250px; /* Limite para não empurrar tudo */
+    padding: 0; 
+    flex: 0 0 auto;
+    
+    /* TRUQUE: Margem negativa agressiva para "comer" o espaço vazio da imagem */
+    margin-bottom: -80px; 
+    margin-top: 10px;
+    
+    /* border: 1px solid red;  <-- Descomente para ver a caixa real */
 }
 
 .home-logo-img {
-    width: 100%;
-    max-width: 320px; /* Tamanho máximo da logo */
+    width: 100%; 
+    max-width: 400px;
     height: auto;
     object-fit: contain;
-    /* Drop shadow para destacar do fundo */
+    
+    /* Mantive o scale para a logo ficar imponente */
+    transform: scale(1.35); 
+    
     filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5)); 
     animation: floatLogo 3s ease-in-out infinite;
+    pointer-events: none; 
 }
 
 @keyframes floatLogo {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-10px); }
+    0%, 100% { transform: scale(1.35) translateY(0); }
+    50% { transform: scale(1.35) translateY(-8px); }
 }
 
 /* --- CARDS DE MODOS DE JOGO --- */
-.game-modes-container { display: flex; flex-direction: column; gap: 15px; margin-bottom: 10px; }
+.game-modes-container { 
+    display: flex; flex-direction: column; 
+    gap: 15px; 
+    flex: 1; 
+    
+    /* Zera a margem para colar na margem negativa da logo */
+    margin-top: 0; 
+    
+    position: relative; 
+    z-index: 10; /* Garante que botões fiquem clicáveis sobre a área vazia da logo */
+}
+
 .section-title { 
     font-size: 0.75rem; letter-spacing: 2px; color: #64748b; 
     font-weight: 700; margin-bottom: 5px; text-transform: uppercase; text-align: center;
+    opacity: 0.8;
 }
 
 .mode-card {
@@ -886,8 +910,13 @@ body.theme-fire .block-unit.type-normal {
     transition: transform 0.2s, box-shadow 0.2s;
     border: none;
     color: #fff;
+    box-shadow: 0 8px 0 rgba(0,0,0,0.2), 0 15px 20px rgba(0,0,0,0.2); 
+    margin-bottom: 8px; 
 }
-.mode-card:active { transform: scale(0.97); }
+.mode-card:active { 
+    transform: translateY(4px); 
+    box-shadow: 0 4px 0 rgba(0,0,0,0.2), 0 5px 10px rgba(0,0,0,0.2);
+}
 
 .card-icon-box { font-size: 1.8rem; opacity: 0.9; }
 .card-texts { flex: 1; }
@@ -896,9 +925,9 @@ body.theme-fire .block-unit.type-normal {
 .card-arrow { font-size: 1.2rem; opacity: 0.6; font-weight: bold; }
 
 /* Cores Cards */
-.card-classic { background: linear-gradient(135deg, #0ea5e9, #0284c7); box-shadow: 0 10px 20px -5px rgba(14, 165, 233, 0.5); }
-.card-adventure { background: linear-gradient(135deg, #ef4444, #dc2626); box-shadow: 0 10px 20px -5px rgba(239, 68, 68, 0.5); }
-.card-blitz { background: linear-gradient(135deg, #d946ef, #c026d3); box-shadow: 0 10px 20px -5px rgba(217, 70, 239, 0.5); }
+.card-classic { background: linear-gradient(135deg, #0ea5e9, #0284c7); }
+.card-adventure { background: linear-gradient(135deg, #ef4444, #dc2626); }
+.card-blitz { background: linear-gradient(135deg, #d946ef, #c026d3); }
 
 .card-tag {
     position: absolute; top: 12px; right: 12px;
@@ -930,7 +959,7 @@ body.theme-fire .block-unit.type-normal {
 .sidebar-header {
     padding: 25px; display: flex; justify-content: space-between; align-items: flex-start;
     border-bottom: 1px solid rgba(255,255,255,0.05);
-    background: #1e293b; /* Destaque sutil para o topo do menu */
+    background: #1e293b;
 }
 
 .sidebar-profile { display: flex; align-items: center; gap: 12px; }
@@ -960,3 +989,4 @@ body.theme-fire .block-unit.type-normal {
 
 .separator { height: 1px; background: rgba(255,255,255,0.08); margin: 15px 0; }
 .sidebar-footer { padding: 25px; text-align: center; color: #475569; font-size: 0.75rem; font-weight: 600; }
+}
