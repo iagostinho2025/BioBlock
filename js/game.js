@@ -4,7 +4,6 @@ import { AudioSystem } from './modules/audio.js';
 import { WORLDS } from './modules/data/levels.js';
 import { BOSS_LOGIC } from './modules/logic/bosses.js';
 
-// Dicionário de Emojis para a UI
 const EMOJI_MAP = {
     'bee': '🐝', 'ghost': '👻', 'cop': '👮',
     'fire': '🔥', 'heart': '❤️‍🔥', 'ice_shard': '💎'
@@ -15,7 +14,6 @@ export class Game {
         this.gridSize = 8;
         this.grid = Array(this.gridSize).fill().map(() => Array(this.gridSize).fill(null));
         
-        // Elementos
         this.screenMenu = document.getElementById('screen-menu');
         this.screenLevels = document.getElementById('screen-levels');
         this.screenGame = document.getElementById('screen-game');
@@ -27,20 +25,18 @@ export class Game {
         this.scoreOverEl = document.getElementById('score-final');
         this.scoreWinEl = document.getElementById('score-victory');
 
-        // Estado
         this.currentMode = 'casual'; 
         this.currentLevelConfig = null;
         this.currentHand = []; 
         this.bossState = { active: false, maxHp: 0, currentHp: 0, attackRate: 3, movesWithoutDamage: 0 };
         
-        // Metas Dinâmicas
         this.currentGoals = {}; 
         this.collected = {};
         this.score = 0;
         
         this.effects = new EffectsSystem();
         this.audio = new AudioSystem();
-        this.maxUnlockedLevel = 99; // Teste
+        this.maxUnlockedLevel = 99; 
 
         this.setupMenuEvents();
     }
@@ -57,28 +53,40 @@ export class Game {
         }
     }
 
-setupMenuEvents() {
-        const bindClick = (id, action) => {
+    setupMenuEvents() {
+        const unlockAudioOnce = () => {
+            if (this.audio && this.audio.unlock) {
+                this.audio.unlock();
+            }
+            document.removeEventListener('click', unlockAudioOnce);
+            document.removeEventListener('touchstart', unlockAudioOnce);
+        };
+        document.addEventListener('click', unlockAudioOnce);
+        document.addEventListener('touchstart', unlockAudioOnce);
+        
+        const bindClick = (id, action, soundType = 'click') => {
             const el = document.getElementById(id);
-            if(el) el.addEventListener('click', action);
+            if(el) {
+                el.addEventListener('click', () => {
+                    if (this.audio) {
+                        if (soundType === 'back') this.audio.playBack();
+                        else if (soundType === 'click') this.audio.playClick();
+                    }
+                    action();
+                });
+            }
         };
 
-        // --- BOTÕES DE JOGO ---
         bindClick('btn-mode-casual', () => this.startCasualMode());
         bindClick('btn-mode-adventure', () => this.showLevelSelect());
-        
-        // Modo Blitz (Placeholder)
-        bindClick('btn-mode-blitz', () => {
-            alert('Modo Blitz: Em breve! ⚡');
-        });
-
-        // --- NAVEGAÇÃO BÁSICA ---
-        bindClick('btn-back-menu', () => this.showScreen(this.screenMenu));
-        bindClick('btn-quit-game', () => this.showScreen(this.screenMenu));
+        bindClick('btn-mode-blitz', () => alert('Modo Blitz: Em breve! ⚡'));
+        bindClick('btn-back-menu', () => this.showScreen(this.screenMenu), 'back');
+        bindClick('btn-quit-game', () => this.showScreen(this.screenMenu), 'back');
         bindClick('btn-restart-over', () => this.retryGame());
         
         const btnRestWin = document.getElementById('btn-restart-win');
         if(btnRestWin) btnRestWin.addEventListener('click', () => {
+            if(this.audio) this.audio.playClick();
             if(this.currentMode === 'adventure') {
                 this.modalWin.classList.add('hidden');
                 this.showLevelSelect();
@@ -87,7 +95,6 @@ setupMenuEvents() {
             }
         });
 
-        // --- LÓGICA DO SIDEBAR (MENU LATERAL) ---
         const sidebar = document.getElementById('app-sidebar');
         const overlay = document.getElementById('menu-overlay');
         const btnOpen = document.getElementById('btn-open-sidebar');
@@ -97,42 +104,53 @@ setupMenuEvents() {
             if(show) {
                 sidebar.classList.add('open');
                 overlay.classList.remove('hidden');
-                setTimeout(() => overlay.classList.add('visible'), 10); // Fade in suave
+                setTimeout(() => overlay.classList.add('visible'), 10);
             } else {
                 sidebar.classList.remove('open');
                 overlay.classList.remove('visible');
-                setTimeout(() => overlay.classList.add('hidden'), 300); // Espera fade out
+                setTimeout(() => overlay.classList.add('hidden'), 300);
             }
         };
 
-        if(btnOpen) btnOpen.addEventListener('click', () => toggleSidebar(true));
-        if(btnClose) btnClose.addEventListener('click', () => toggleSidebar(false));
-        if(overlay) overlay.addEventListener('click', () => toggleSidebar(false));
+        if(btnOpen) btnOpen.addEventListener('click', () => {
+            if(this.audio) this.audio.playClick();
+            toggleSidebar(true);
+        });
+
+        if(btnClose) btnClose.addEventListener('click', () => {
+            if(this.audio) this.audio.playBack();
+            toggleSidebar(false);
+        });
+        
+        if(overlay) overlay.addEventListener('click', () => {
+            if(this.audio) this.audio.playBack();
+            toggleSidebar(false);
+        });
+        
+        const footerLink = document.querySelector('.footer-link');
+        if(footerLink) footerLink.addEventListener('click', () => { if(this.audio) this.audio.playClick(); });
     }
 
     showScreen(screenEl) {
+        if (this.screenGame.classList.contains('active-screen')) {
+            if(this.audio) this.audio.stopMusic();
+        }
         [this.screenMenu, this.screenLevels, this.screenGame].forEach(s => s?.classList.add('hidden'));
         screenEl?.classList.remove('hidden');
         screenEl?.classList.add('active-screen');
     }
 
-    // --- SISTEMA DE METAS DINÂMICO ---
-    
-    // Configura a UI de metas baseada no objeto de objetivos (seja casual ou fase)
     setupGoalsUI(goalsConfig) {
         if(!this.goalsArea) return;
-        this.currentGoals = { ...goalsConfig }; // Copia as metas
+        this.currentGoals = { ...goalsConfig }; 
         this.collected = {};
         
-        // Zera contadores
         Object.keys(this.currentGoals).forEach(key => this.collected[key] = 0);
 
         let html = '<div class="goals-container">';
-        
         Object.keys(this.currentGoals).forEach(key => {
             const emoji = EMOJI_MAP[key] || '❓';
             const target = this.currentGoals[key];
-            // Gera classes CSS dinâmicas (ex: type-fire-glow)
             const glowClass = `type-${key}-glow`; 
             
             html += `
@@ -168,7 +186,6 @@ setupMenuEvents() {
     }
 
     checkVictoryConditions() {
-        // Verifica se todas as metas foram cumpridas
         const allMet = Object.keys(this.currentGoals).every(key => {
             return (this.collected[key] || 0) >= this.currentGoals[key];
         });
@@ -178,15 +195,11 @@ setupMenuEvents() {
         }
     }
 
-    // --- MODOS ---
-
     startCasualMode() {
         this.currentMode = 'casual';
         this.currentLevelConfig = null;
         this.clearTheme();
         this.showScreen(this.screenGame);
-        
-        // Metas padrão do Casual
         this.setupGoalsUI({ bee: 10, ghost: 10, cop: 10 });
         this.resetGame();
     }
@@ -218,7 +231,7 @@ setupMenuEvents() {
         this.currentLevelConfig = levelConfig;
         
         this.clearTheme();
-        document.body.classList.add('theme-fire'); // Força tema fogo
+        document.body.classList.add('theme-fire'); 
 
         this.showScreen(this.screenGame);
         
@@ -226,11 +239,14 @@ setupMenuEvents() {
             const bossData = levelConfig.boss || { id: 'dragon', name: 'Dragão', emoji: '🐉', maxHp: 50 };
             this.setupBossUI(bossData);
             this.bossState = { active: true, maxHp: bossData.maxHp, currentHp: bossData.maxHp, attackRate: 3, movesWithoutDamage: 0 };
-            this.currentGoals = {}; // Boss não tem meta de coleta tradicional
+            this.currentGoals = {}; 
+            
+            if(this.audio) this.audio.playBossMusic();
+
         } else {
             this.bossState.active = false;
-            // Configura metas da fase (ex: { fire: 10 })
             this.setupGoalsUI(levelConfig.goals || {});
+            if(this.audio) this.audio.stopMusic();
         }
 
         this.resetGame();
@@ -261,16 +277,13 @@ setupMenuEvents() {
         this.grid = Array(this.gridSize).fill().map(() => Array(this.gridSize).fill(null));
         this.score = 0;
         
-        // Zera coletas visualmente
         if(this.currentMode !== 'adventure' || !this.bossState.active) {
             this.setupGoalsUI(this.currentGoals); 
         } else {
-            // Se for boss, reseta HP
             this.bossState.currentHp = this.bossState.maxHp;
             this.updateBossUI();
         }
 
-        // Carrega Grid
         if (this.currentMode === 'adventure' && this.currentLevelConfig?.gridConfig) {
             this.currentLevelConfig.gridConfig.forEach(cfg => {
                 if(this.grid[cfg.r]) {
@@ -361,15 +374,24 @@ setupMenuEvents() {
     }
 
     attachDragEvents(el, piece) {
-        let isDragging = false; let clone = null;
-        let cellPixelSize = 0; let boardRect = null;
+        let isDragging = false;
+        let clone = null;
+        let cellPixelSize = 0; 
+        let boardRect = null;
 
         const onStart = (e) => {
             if (isDragging) return;
-            this.audio.resume(); this.audio.vibrate(10);
-            isDragging = true; this.activeSnap = null;
+            if(this.audio) this.audio.playDrag();
+            isDragging = true; 
+            this.activeSnap = null;
+            
             boardRect = this.boardEl.getBoundingClientRect();
-            cellPixelSize = boardRect.width / this.gridSize;
+            const firstCell = this.boardEl.querySelector('.cell');
+            if (firstCell) {
+                cellPixelSize = firstCell.getBoundingClientRect().width;
+            } else {
+                cellPixelSize = (boardRect.width - 16) / 8;
+            }
             
             clone = el.cloneNode(true);
             clone.classList.add('dragging-active');
@@ -388,7 +410,7 @@ setupMenuEvents() {
 
         const onMove = (e) => {
             if (!isDragging || !clone) return;
-            e.preventDefault();
+            e.preventDefault(); 
             const touch = e.touches ? e.touches[0] : e;
             this.moveClone(clone, touch.clientX, touch.clientY);
             this.updateGhostPreview(clone, boardRect, cellPixelSize, piece);
@@ -406,24 +428,35 @@ setupMenuEvents() {
             }
 
             if (placed) {
-                this.audio.playDrop(); this.audio.vibrate(20); 
+                if(this.audio) {
+                    this.audio.playDrop(); 
+                    this.audio.vibrate(20);
+                }
+                
                 el.remove(); 
                 
                 const damageDealt = this.checkLines(dropX, dropY); 
                 
                 if (this.currentMode === 'adventure') {
-                    if (this.bossState.active) this.processBossTurn(damageDealt);
-                    else this.checkVictoryConditions(); // Nova verificação unificada
+                    if (this.bossState.active) {
+                        this.processBossTurn(damageDealt);
+                    } else {
+                        this.checkVictoryConditions();
+                    }
                 } else {
-                    this.checkVictoryConditions(); // Casual usa a mesma lógica agora
+                    this.checkVictoryConditions();
                 }
 
                 const remainingPieces = this.dockEl.querySelectorAll('.draggable-piece');
-                if (remainingPieces.length === 0) this.spawnNewHand();
-                else if (!this.checkMovesAvailable()) this.gameOver();
+                if (remainingPieces.length === 0) {
+                    this.spawnNewHand();
+                } else {
+                    if (!this.checkMovesAvailable()) this.gameOver();
+                }
             } else {
                 el.style.opacity = '1';
             }
+            
             if (clone) clone.remove();
             this.clearGhostPreview();
             this.activeSnap = null;
@@ -449,14 +482,18 @@ setupMenuEvents() {
         this.clearGhostPreview();
         const cloneRect = clone.getBoundingClientRect();
         
-        const relativeX = (cloneRect.left + cloneRect.width / 2) - boardRect.left;
-        const relativeY = (cloneRect.top + cloneRect.height / 2) - boardRect.top;
+        const GAP = 4;      
+        const PADDING = 8;  
+        
+        const relativeX = (cloneRect.left + cloneRect.width / 2) - (boardRect.left + PADDING);
+        const relativeY = (cloneRect.top + cloneRect.height / 2) - (boardRect.top + PADDING);
         
         const pieceCols = piece.matrix[0].length;
         const pieceRows = piece.matrix.length;
+        const effectiveSize = cellSize + GAP;
         
-        const exactCol = (relativeX / cellSize) - (pieceCols / 2);
-        const exactRow = (relativeY / cellSize) - (pieceRows / 2);
+        const exactCol = (relativeX / effectiveSize) - (pieceCols / 2);
+        const exactRow = (relativeY / effectiveSize) - (pieceRows / 2);
         
         const baseR = Math.round(exactRow);
         const baseC = Math.round(exactCol);
@@ -472,7 +509,7 @@ setupMenuEvents() {
                     bestMatch = { r: cand.r, c: cand.c, valid: true };
                     minDistance = dist;
                 }
-            } else if (!bestMatch && dist < 1.0) { 
+            } else if (!bestMatch && dist < 0.6) { 
                 bestMatch = { r: cand.r, c: cand.c, valid: false };
             }
         }
@@ -560,8 +597,17 @@ setupMenuEvents() {
         if (linesCleared > 0) {
             this.renderGrid(); 
             this.effects.showFeedback(linesCleared);
-            this.audio.playClear(linesCleared);
-            this.audio.vibrate([30, 50, 30]);
+            
+            // --- SOM DE CLEAR (BOSS vs NORMAL) ---
+            if(this.audio) {
+                if (this.bossState.active) {
+                    this.audio.playBossClear(linesCleared); // Som específico de ataque
+                } else {
+                    this.audio.playClear(linesCleared); // Som normal
+                }
+                this.audio.vibrate([30, 50, 30]);
+            }
+            
             this.score += linesCleared * 10 * linesCleared; 
         }
         
@@ -593,17 +639,14 @@ setupMenuEvents() {
     collectItem(cellData) {
         if (!cellData) return false;
         
-        // Coleta Genérica (Casual ou Fase)
         if (cellData.type === 'ITEM') {
             const key = cellData.key.toLowerCase(); 
-            // Só conta se for uma meta da fase atual
             if (this.currentGoals[key] !== undefined) {
                 this.collected[key] = (this.collected[key] || 0) + 1;
                 this.updateGoalsUI();
             }
         }
 
-        // Lógica de Dano no Boss
         if (this.currentMode === 'adventure' && this.bossState.active) {
             const damage = cellData.damage || 0;
             if (damage > 0) {
@@ -691,8 +734,12 @@ setupMenuEvents() {
     }
 
     gameWon() {
-        this.audio.playClear(3); 
-        this.audio.vibrate([100, 50, 100, 50, 200]);
+        if(this.audio) this.audio.stopMusic();
+
+        if(this.audio) {
+            this.audio.playClear(3); 
+            this.audio.vibrate([100, 50, 100, 50, 200]);
+        }
         if(this.scoreWinEl) this.scoreWinEl.innerText = this.score;
         if(this.modalWin) this.modalWin.classList.remove('hidden');
 
@@ -703,6 +750,8 @@ setupMenuEvents() {
     }
 
     gameOver() {
+        if(this.audio) this.audio.stopMusic();
+
         if(this.scoreOverEl) this.scoreOverEl.innerText = this.score;
         if(this.modalOver) this.modalOver.classList.remove('hidden');
     }

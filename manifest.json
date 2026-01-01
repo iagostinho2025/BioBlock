@@ -1,6 +1,6 @@
 {
-  "name": "BioBlock Puzzle",
-  "short_name": "BioBlock",
+  "name": "Block Lands Adventure",
+  "short_name": "Block Lands",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0f172a",
