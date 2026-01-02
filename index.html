@@ -135,37 +135,87 @@
                 <div id="dock">
                     </div>
                 
+                <div id="powerups-area">
+                    <button class="btn-powerup" id="pwr-bomb" data-type="bomb">
+                        <div class="pwr-icon">💣</div>
+                        <div class="pwr-count">0/3</div>
+                    </button>
+                    <button class="btn-powerup" id="pwr-rotate" data-type="rotate">
+                        <div class="pwr-icon">🔄</div>
+                        <div class="pwr-count">0/3</div>
+                    </button>
+                    <button class="btn-powerup" id="pwr-swap" data-type="swap">
+                        <div class="pwr-icon">🔀</div>
+                        <div class="pwr-count">0/3</div>
+                    </button>
+                </div>
+
             </div>
 
-        </div>
-
-        <div id="modal-gameover" class="modal hidden">
-            <div class="glass-panel theme-fail">
-                <div class="modal-icon-container">
-                    <span class="modal-icon">💥</span>
-                </div>
-                <h2 class="modal-title">Fim de Jogo</h2>
-                <p class="modal-desc">Sem movimentos disponíveis.</p>
-                <div class="result-box">
-                    <span class="result-label">Pontuação</span>
-                    <span class="result-value" id="score-final">0</span>
-                </div>
-                <button id="btn-restart-over" class="btn-primary btn-fail">Tentar Novamente</button>
-            </div>
         </div>
 
         <div id="modal-victory" class="modal hidden">
-            <div class="glass-panel theme-win">
-                <div class="modal-icon-container win-glow">
-                    <span class="modal-icon">🏆</span>
+            <div class="result-floating-container">
+                
+                <div class="result-header-image">
+                    <img src="assets/images/image_e0b0c7.png" alt="Vitória Perfeita">
                 </div>
-                <h2 class="modal-title">Vitória!</h2>
-                <p class="modal-desc">Objetivo completado com sucesso.</p>
-                <div class="result-box win-box">
-                    <span class="result-label">Pontuação</span>
-                    <span class="result-value" id="score-victory">0</span>
+
+                <div class="result-content">
+                    
+                    <div class="floating-section">
+                        <h3 class="section-label-shadow">Objetivos</h3>
+                        <div id="victory-goals-grid" class="items-grid"></div>
+                    </div>
+
+                    <div id="victory-rewards-section" class="floating-section hidden">
+                        <h3 class="section-label-shadow" style="color: #fcd34d;">Recompensas</h3>
+                        <div id="victory-rewards-grid" class="items-grid"></div>
+                    </div>
+
+                    <div class="result-score">
+                        <span>Pontuação:</span> <strong id="score-victory">0</strong>
+                    </div>
                 </div>
-                <button id="btn-restart-win" class="btn-primary btn-win">Continuar</button>
+
+                <div class="result-buttons-row">
+                    <button id="btn-next-level" class="btn-3d btn-3d-yellow">Continuar</button>
+                    <button id="btn-victory-back" class="btn-3d btn-3d-blue">Voltar</button>
+                </div>
+
+            </div>
+        </div>
+
+        <div id="modal-gameover" class="modal hidden">
+            <div class="result-floating-container">
+                
+                <div class="result-header-image">
+                    <img src="assets/images/image_e0b124.png" alt="Foi Quase">
+                </div>
+
+                <div class="result-content">
+                    
+                    <div class="floating-section">
+                        <h3 class="section-label-shadow">Progresso</h3>
+                        <div id="fail-goals-grid" class="items-grid">
+                            </div>
+                    </div>
+
+                    <div id="fail-rewards-section" class="floating-section hidden">
+                        <h3 class="section-label-shadow" style="color: #fcd34d;">Recompensas</h3>
+                        <div id="fail-rewards-grid" class="items-grid"></div>
+                    </div>
+
+                    <div class="result-score">
+                        <span>Pontuação:</span> <strong id="score-final">0</strong>
+                    </div>
+                </div>
+
+                <div class="result-buttons-row">
+                    <button id="btn-restart-over" class="btn-3d btn-3d-yellow">Reiniciar</button>
+                    <button id="btn-quit-over" class="btn-3d btn-3d-blue">Voltar</button>
+                </div>
+
             </div>
         </div>
 

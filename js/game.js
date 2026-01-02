@@ -6,7 +6,8 @@ import { BOSS_LOGIC } from './modules/logic/bosses.js';
 
 const EMOJI_MAP = {
     'bee': '🐝', 'ghost': '👻', 'cop': '👮',
-    'fire': '🔥', 'heart': '❤️‍🔥', 'ice_shard': '💎'
+    'fire': '🔥', 'heart': '❤️‍🔥', 'ice_shard': '💎',
+    'bomb': '💣', 'rotate': '🔄', 'swap': '🔀'
 };
 
 export class Game {
@@ -37,6 +38,10 @@ export class Game {
         this.score = 0;
         this.activeSnap = null; 
         
+        // Power-Ups
+        this.powerUps = { bomb: 0, rotate: 0, swap: 0 };
+        this.interactionMode = null; // 'bomb', 'rotate', ou null
+        
         // Sistemas
         this.effects = new EffectsSystem();
         this.audio = new AudioSystem();
@@ -56,6 +61,21 @@ export class Game {
             localStorage.setItem('blocklands_progress_main', levelId);
         }
     }
+    
+    // --- Carregar PowerUps ---
+    loadPowerUps() {
+        this.powerUps.bomb = parseInt(localStorage.getItem('powerup_bomb') || '0');
+        this.powerUps.rotate = parseInt(localStorage.getItem('powerup_rotate') || '0');
+        this.powerUps.swap = parseInt(localStorage.getItem('powerup_swap') || '0');
+        this.updatePowerUpsUI();
+    }
+
+    savePowerUps() {
+        localStorage.setItem('powerup_bomb', this.powerUps.bomb);
+        localStorage.setItem('powerup_rotate', this.powerUps.rotate);
+        localStorage.setItem('powerup_swap', this.powerUps.swap);
+        this.updatePowerUpsUI();
+    }
 
     setupMenuEvents() {
         // Unlock de Áudio
@@ -72,9 +92,9 @@ export class Game {
         const bindClick = (id, action) => {
             const el = document.getElementById(id);
             if(el) {
-                el.addEventListener('click', () => {
+                el.addEventListener('click', (e) => {
                     if (this.audio) this.audio.playClick();
-                    action();
+                    action(e);
                 });
             }
         };
@@ -86,15 +106,17 @@ export class Game {
         
         bindClick('btn-back-menu', () => this.showScreen(this.screenMenu));
         bindClick('btn-quit-game', () => this.showScreen(this.screenMenu));
+        
+        // Botão Reiniciar na derrota
         bindClick('btn-restart-over', () => this.retryGame());
         
-        // Restart na Vitória
-        const btnRestWin = document.getElementById('btn-restart-win');
-        if(btnRestWin) btnRestWin.addEventListener('click', () => {
-            if(this.audio) this.audio.playClick();
-            if(this.currentMode === 'adventure') {
-                this.modalWin.classList.add('hidden');
-                // Tenta voltar para o mapa do mundo atual
+        // --- CORREÇÃO AQUI: Botão Voltar da tela de derrota ---
+        bindClick('btn-quit-over', () => {
+            this.modalOver.classList.add('hidden');
+            
+            if (this.currentMode === 'adventure') {
+                // Modo Aventura: Volta para o MAPA DA FASE
+                this.showScreen(this.screenLevels);
                 const currentWorld = WORLDS.find(w => w.levels.some(l => l.id === this.currentLevelConfig?.id));
                 if (currentWorld) {
                     this.openWorldMap(currentWorld);
@@ -102,9 +124,68 @@ export class Game {
                     this.showWorldSelect();
                 }
             } else {
-                this.retryGame();
+                // Modo Casual: Volta para o MENU
+                this.showScreen(this.screenMenu);
             }
         });
+        
+        // Eventos dos Power-Ups
+        bindClick('pwr-bomb', () => this.activatePowerUp('bomb'));
+        bindClick('pwr-rotate', () => this.activatePowerUp('rotate'));
+        bindClick('pwr-swap', () => this.activatePowerUp('swap'));
+        
+// --- NOVOS BOTÕES DE VITÓRIA (Padrão 2 Botões) ---
+        
+        // 1. Botão "Continuar" (Amarelo)
+        const btnNextLevel = document.getElementById('btn-next-level');
+        if (btnNextLevel) {
+            btnNextLevel.addEventListener('click', () => {
+                if(this.audio) this.audio.playClick();
+                this.modalWin.classList.add('hidden');
+                
+                if(this.currentMode === 'adventure') {
+                    // Tenta ir para o próximo nível
+                    const currentWorld = WORLDS.find(w => w.levels.some(l => l.id === this.currentLevelConfig?.id));
+                    const nextLevelId = this.currentLevelConfig.id + 1;
+                    
+                    // Verifica se existe próximo nível no mesmo mundo ou global
+                    // Lógica simplificada: Reabre o mapa para o jogador clicar no próximo (padrão Candy Crush)
+                    // Ou inicia direto:
+                    // this.startAdventureLevel(ProximoNivelConfig); 
+                    
+                    // Vamos manter o fluxo de voltar ao mapa para ver o progresso
+                    if (currentWorld) {
+                        this.showScreen(this.screenLevels);
+                        this.openWorldMap(currentWorld);
+                    } else {
+                        this.showWorldSelect();
+                    }
+                } else {
+                    // Se for Casual/Bonus, "Continuar" reinicia ou volta pro menu
+                    this.retryGame(); // Ou volta pro menu, depende da preferência
+                }
+            });
+        }
+
+        // 2. Botão "Voltar" (Azul)
+        const btnVictoryBack = document.getElementById('btn-victory-back');
+        if (btnVictoryBack) {
+            btnVictoryBack.addEventListener('click', () => {
+                if(this.audio) this.audio.playBack();
+                this.modalWin.classList.add('hidden');
+                
+                if (this.currentMode === 'adventure') {
+                    // Volta para o Mapa
+                    this.showScreen(this.screenLevels);
+                    const currentWorld = WORLDS.find(w => w.levels.some(l => l.id === this.currentLevelConfig?.id));
+                    if (currentWorld) this.openWorldMap(currentWorld);
+                    else this.showWorldSelect();
+                } else {
+                    // Volta para o Menu Principal
+                    this.showScreen(this.screenMenu);
+                }
+            });
+        }
 
         // Sidebar
         const btnOpen = document.getElementById('btn-open-sidebar');
@@ -120,13 +201,163 @@ export class Game {
         if(overlay) overlay.addEventListener('click', () => { if(this.audio) this.audio.playBack(); toggleSidebar(false); });
     }
 
-    // --- GERENCIAMENTO DE TELAS (BLINDADO) ---
+    // --- POWER-UP LOGIC ---
+
+    updatePowerUpsUI() {
+        ['bomb', 'rotate', 'swap'].forEach(type => {
+            const btn = document.getElementById(`pwr-${type}`);
+            if(!btn) return;
+            
+            const count = this.powerUps[type];
+            btn.querySelector('.pwr-count').innerText = `${count}/3`;
+            
+            btn.classList.remove('active-mode');
+
+            if (count <= 0) {
+                btn.classList.add('disabled');
+            } else {
+                btn.classList.remove('disabled');
+            }
+            
+            if (this.interactionMode === type) {
+                btn.classList.add('active-mode');
+            }
+        });
+    }
+
+    activatePowerUp(type) {
+        if (this.powerUps[type] <= 0) {
+            if(this.audio) this.audio.vibrate(50); 
+            return;
+        }
+
+        if (this.interactionMode === type) {
+            this.interactionMode = null;
+            this.updatePowerUpsUI();
+            return;
+        }
+
+        if (type === 'swap') {
+            if(this.audio) this.audio.playClick(); 
+            this.powerUps.swap--;
+            this.savePowerUps();
+            this.spawnNewHand(); 
+            this.effects.shakeScreen(); 
+            return;
+        }
+
+        this.interactionMode = type;
+        this.updatePowerUpsUI();
+        if(this.audio) this.audio.playClick();
+    }
+
+    handleBoardClick(r, c) {
+        if (this.interactionMode === 'bomb') {
+            this.useBomb(r, c);
+            this.interactionMode = null;
+            this.updatePowerUpsUI();
+        }
+    }
+
+    handlePieceClick(index) {
+        if (this.interactionMode === 'rotate') {
+            this.useRotate(index);
+            this.interactionMode = null;
+            this.updatePowerUpsUI();
+        }
+    }
+
+    useBomb(centerR, centerC) {
+        let exploded = false;
+        
+        for (let r = centerR - 1; r <= centerR + 1; r++) {
+            for (let c = centerC - 1; c <= centerC + 1; c++) {
+                if (r >= 0 && r < this.gridSize && c >= 0 && c < this.gridSize) {
+                    if (this.grid[r][c]) {
+                        
+                        const idx = r * 8 + c;
+                        const cell = this.boardEl.children[idx];
+                        if (cell) {
+                            const rect = cell.getBoundingClientRect();
+                            this.spawnExplosion(rect, 'type-fire'); 
+                        }
+
+                        this.collectItem(r, c, this.grid[r][c]);
+                        
+                        this.grid[r][c] = null;
+                        exploded = true;
+                    }
+                }
+            }
+        }
+
+        if (exploded) {
+            this.powerUps.bomb--;
+            this.savePowerUps();
+            if(this.audio) this.audio.playClear(2); 
+            this.effects.shakeScreen();
+            this.renderGrid(); 
+
+            // Verifica vitória após explosão
+            setTimeout(() => {
+                if (!this.bossState.active) {
+                    this.checkVictoryConditions();
+                }
+            }, 100);
+        }
+    }
+
+    useRotate(pieceIndex) {
+        const piece = this.currentHand[pieceIndex];
+        if (!piece) return;
+
+        const oldLayout = piece.layout;
+        if (!oldLayout || oldLayout.length === 0) return;
+
+        // Rotação segura que preserva itens
+        const newLayout = oldLayout[0].map((val, index) =>
+            oldLayout.map(row => row[index]).reverse()
+        );
+
+        // Verificação inteligente
+        if (JSON.stringify(oldLayout) === JSON.stringify(newLayout)) {
+            if(this.audio) this.audio.vibrate(50); 
+            const slot = this.dockEl.children[pieceIndex];
+            if (slot) {
+                slot.style.transition = '0.1s';
+                slot.style.transform = 'translateX(5px)';
+                setTimeout(() => slot.style.transform = 'translateX(-5px)', 50);
+                setTimeout(() => slot.style.transform = 'none', 100);
+            }
+            return; 
+        }
+
+        piece.layout = newLayout;
+        piece.matrix = newLayout; 
+        
+        this.powerUps.rotate--;
+        this.savePowerUps();
+        
+        this.renderDock();
+        if(this.audio) this.audio.playClick(); 
+    }
+
+    renderDock() {
+        this.dockEl.innerHTML = '';
+        this.currentHand.forEach((piece, index) => {
+            const slot = document.createElement('div');
+            slot.classList.add('dock-slot');
+            if (piece) this.createDraggablePiece(piece, index, slot);
+            this.dockEl.appendChild(slot);
+        });
+    }
+
+    // --- GERENCIAMENTO DE TELAS ---
     showScreen(screenEl) {
         if (this.screenGame.classList.contains('active-screen')) {
             if(this.audio) this.audio.stopMusic();
         }
         
-        // 1. Limpeza Total: Remove active-screen de tudo e esconde tudo
         [this.screenMenu, this.screenLevels, this.screenGame].forEach(s => {
             if(s) {
                 s.classList.remove('active-screen');
@@ -134,14 +365,12 @@ export class Game {
             }
         });
         
-        // 2. Controla Header Global
         if (screenEl === this.screenMenu) {
-            this.toggleGlobalHeader(false); // Menu não tem header padrão
+            this.toggleGlobalHeader(false); 
         } else {
             this.toggleGlobalHeader(true);
         }
 
-        // 3. Ativa a tela desejada
         if(screenEl) {
             screenEl.classList.remove('hidden');
             screenEl.classList.add('active-screen');
@@ -159,14 +388,12 @@ export class Game {
     // --- MUNDOS E NÍVEIS ---
 
     showWorldSelect() {
-        // Limpa imagem de fundo se houver
         const container = document.getElementById('levels-container');
         if (container) {
             container.style.backgroundImage = 'none';
             container.style.backgroundColor = '';
         }
 
-        // Exibe tela
         this.showScreen(this.screenLevels); 
         this.toggleGlobalHeader(false); 
 
@@ -182,7 +409,6 @@ export class Game {
             <div class="worlds-grid" id="worlds-grid"></div>
         `;
 
-        // Botão Voltar (com stopPropagation para evitar bugs)
         const backBtn = document.getElementById('btn-world-back-internal');
         if (backBtn) {
             const newBackBtn = backBtn.cloneNode(true);
@@ -192,11 +418,8 @@ export class Game {
                 e.stopPropagation();
                 e.preventDefault();
                 if(this.audio) this.audio.playBack();
-                
-                // Limpeza do container antes de sair
                 container.className = '';
                 container.innerHTML = '';
-                
                 this.showScreen(this.screenMenu);
             });
         }
@@ -236,14 +459,12 @@ export class Game {
         });
     }
 
-// 2. MAPA DE FASES (GRID FLUTUANTE - ATUALIZADO)
     openWorldMap(worldConfig) {
         const container = document.getElementById('levels-container');
         if(!container) return;
 
         this.toggleGlobalHeader(false);
 
-        // Imagem de Fundo
         if (worldConfig.bgImage) {
             container.style.backgroundImage = `url('${worldConfig.bgImage}')`;
         } else {
@@ -258,12 +479,14 @@ export class Game {
             <div id="level-grid-area" class="level-grid-layout"></div>
         `;
 
-        // Botão Voltar
-        document.getElementById('btn-map-back').addEventListener('click', (e) => {
-            e.stopPropagation();
-            if(this.audio) this.audio.playBack();
-            this.showWorldSelect(); 
-        });
+        const mapBackBtn = document.getElementById('btn-map-back');
+        if(mapBackBtn) {
+            mapBackBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if(this.audio) this.audio.playBack();
+                this.showWorldSelect(); 
+            });
+        }
 
         const gridArea = document.getElementById('level-grid-area');
         const currentSave = this.loadProgress();
@@ -273,9 +496,7 @@ export class Game {
             const btn = document.createElement('button');
             btn.classList.add('level-btn');
             
-            // --- 1. ESTADOS ---
             let isLocked = false;
-            
             if (level.id < currentSave) {
                 btn.classList.add('status-completed');
             } else if (level.id === currentSave) {
@@ -285,43 +506,53 @@ export class Game {
                 isLocked = true;
             }
 
-            // --- 2. TIPOS E CONTEÚDO ---
-            
-            // BOSS (Fase 20)
-            if (levelNum === 20) {
+            if (levelNum === 20) { 
                 btn.classList.add('type-boss');
-                // ALTERAÇÃO AQUI: Mostra o avatar SEMPRE, removendo a interrogação
-                btn.innerText = worldConfig.bossAvatar || '🐉'; 
+                btn.innerText = worldConfig.bossAvatar || '🐉';
             } 
-            // ELITE (Fases 10 e 15)
-            else if (levelNum === 10 || levelNum === 15) {
+            else if (levelNum === 10 || levelNum === 15) { 
                 btn.classList.add('type-elite');
                 btn.innerHTML = `${levelNum} <div class="elite-skull">💀</div>`;
             } 
-            // NORMAL
-            else {
+            else { 
                 btn.innerText = levelNum;
             }
 
-            // --- 3. AÇÃO ---
             btn.addEventListener('click', () => {
                 if (!isLocked) {
                     if(this.audio) this.audio.playClick();
-                    
                     this.toggleGlobalHeader(true); 
-                    // Limpa fundo para o jogo
                     container.style.backgroundImage = 'none';
-                    
                     document.body.className = ''; 
                     if(worldConfig.themeClass) document.body.classList.add(worldConfig.themeClass);
-                    
                     this.startAdventureLevel(level);
                 } else {
                     if(this.audio) this.audio.vibrate(50);
                 }
             });
-            
             gridArea.appendChild(btn);
+
+            if (levelNum === 19) {
+                const bonusBtn = document.createElement('button');
+                bonusBtn.classList.add('level-btn', 'type-bonus'); 
+                bonusBtn.innerHTML = '🎁'; 
+                
+                const isBonusAvailable = true; 
+
+                if (isBonusAvailable) {
+                    bonusBtn.addEventListener('click', () => {
+                        if(this.audio) this.audio.playClick();
+                        import('./modules/data/levels.js').then(module => {
+                            this.toggleGlobalHeader(true);
+                            container.style.backgroundImage = 'none';
+                            this.startAdventureLevel(module.BONUS_LEVEL_CONFIG);
+                        });
+                    });
+                } else {
+                    bonusBtn.classList.add('status-locked');
+                }
+                gridArea.appendChild(bonusBtn);
+            }
         });
     }
 
@@ -359,15 +590,66 @@ export class Game {
     }
 
     checkVictoryConditions() {
-        if (!this.currentGoals || Object.keys(this.currentGoals).length === 0) return;
+        if (!this.currentGoals || Object.keys(this.currentGoals).length === 0) return false;
+
+        if (this.currentLevelConfig && this.currentLevelConfig.type === 'bonus') {
+            const winners = [];
+            
+            // 1. Carrega inventário
+            const inventory = {
+                bomb: parseInt(localStorage.getItem('powerup_bomb') || '0'),
+                rotate: parseInt(localStorage.getItem('powerup_rotate') || '0'),
+                swap: parseInt(localStorage.getItem('powerup_swap') || '0')
+            };
+
+            const isFullInventory = (inventory.bomb >= 3 && inventory.rotate >= 3 && inventory.swap >= 3);
+
+            // 2. Verifica metas
+            Object.keys(this.currentGoals).forEach(key => {
+                const currentAmount = this.collected[key] || 0;
+                const targetAmount = this.currentGoals[key];
+
+                if (currentAmount >= targetAmount) {
+                    // Só ganha se precisar do item
+                    if (inventory[key] < 3 || isFullInventory) {
+                        winners.push(key);
+                    }
+                }
+            });
+
+            if (winners.length > 0) {
+                const rewardsList = [];
+
+                winners.forEach(powerUp => {
+                    const currentAmount = parseInt(localStorage.getItem(`powerup_${powerUp}`) || '0');
+                    const newAmount = Math.min(currentAmount + 1, 3);
+                    localStorage.setItem(`powerup_${powerUp}`, newAmount);
+                    
+                    rewardsList.push({ type: powerUp, count: 1 });
+                });
+                
+                this.loadPowerUps();
+
+                setTimeout(() => {
+                    this.gameWon(this.collected, rewardsList);
+                }, 300);
+                
+                return true; 
+            }
+            return false;
+        }
 
         const allMet = Object.keys(this.currentGoals).every(key => {
             return (this.collected[key] || 0) >= this.currentGoals[key];
         });
 
         if (allMet) {
-            setTimeout(() => this.gameWon(), 300);
+            setTimeout(() => {
+                this.gameWon(this.collected, []); 
+            }, 300);
+            return true;
         }
+        return false;
     }
 
     startCasualMode() {
@@ -406,7 +688,7 @@ export class Game {
         if(!this.goalsArea) return;
         this.goalsArea.innerHTML = `
             <div class="boss-ui-container">
-                <div class="boss-avatar">${bossData.emoji}</div>
+                <div id="boss-target" class="boss-avatar">${bossData.emoji}</div>
                 <div class="boss-stats"><div class="boss-name">${bossData.name}</div>
                 <div class="hp-bar-bg"><div class="hp-bar-fill" id="boss-hp-bar" style="width: 100%"></div></div></div>
             </div>`;
@@ -427,14 +709,18 @@ export class Game {
         this.grid = Array(this.gridSize).fill().map(() => Array(this.gridSize).fill(null));
         this.score = 0;
         
-        if(this.currentMode !== 'adventure' || !this.bossState.active) {
-            this.setupGoalsUI(this.currentGoals); 
+        this.interactionMode = null;
+        this.bossState.active = (this.currentLevelConfig?.type === 'boss');
+        this.loadPowerUps(); 
+        
+        if(!this.bossState.active) {
+            const goals = (this.currentMode === 'casual') ? { bee: 10, ghost: 10, cop: 10 } : this.currentGoals;
+            this.setupGoalsUI(goals); 
         } else {
             this.bossState.currentHp = this.bossState.maxHp;
             this.updateBossUI();
         }
 
-        // Carrega Grid Config (Vulcões)
         if (this.currentMode === 'adventure' && this.currentLevelConfig?.gridConfig) {
             this.currentLevelConfig.gridConfig.forEach(cfg => {
                 if(this.grid[cfg.r]) {
@@ -450,6 +736,110 @@ export class Game {
         this.spawnNewHand();
     }
 
+    // --- EFEITO VISUAL: Partículas ---
+    spawnExplosion(rect, colorClass) {
+        const colors = {
+            'type-fire': '#ef4444',
+            'type-water': '#3b82f6',
+            'type-forest': '#22c55e',
+            'type-mountain': '#78716c',
+            'type-ice': '#06b6d4',
+            'type-zombie': '#84cc16',
+            'type-bee': '#eab308',
+            'type-ghost': '#a855f7',
+            'type-cop': '#1e40af',
+            'type-normal': '#3b82f6',
+            'lava': '#b91c1c'
+        };
+        
+        const bg = colors[colorClass] || '#3b82f6';
+
+        for (let i = 0; i < 8; i++) {
+            const debris = document.createElement('div');
+            debris.classList.add('debris-particle');
+            
+            debris.style.position = 'fixed';
+            debris.style.zIndex = '9999';
+            debris.style.pointerEvents = 'none';
+            debris.style.width = `${Math.random() * 12 + 12}px`;
+            debris.style.height = debris.style.width;
+            
+            debris.style.backgroundColor = bg;
+            
+            const startX = rect.left + (rect.width / 2) + (Math.random() * 30 - 15);
+            const startY = rect.top + (rect.height / 2) + (Math.random() * 30 - 15);
+            
+            debris.style.left = `${startX}px`;
+            debris.style.top = `${startY}px`;
+
+            const tx = (Math.random() * 240 - 120) + 'px';
+            const ty = (Math.random() * 240 - 120) + 'px';
+            const rot = (Math.random() * 720) + 'deg';
+
+            debris.style.setProperty('--tx', tx);
+            debris.style.setProperty('--ty', ty);
+            debris.style.setProperty('--rot', rot);
+
+            debris.style.animation = `crumble-fly 0.7s ease-out forwards`;
+
+            document.body.appendChild(debris);
+
+            setTimeout(() => debris.remove(), 700);
+        }
+    }
+
+    // --- EFEITO VISUAL: Voo ---
+    runFlyAnimation(r, c, key, emoji) {
+        const idx = r * 8 + c;
+        const cell = this.boardEl.children[idx];
+        if (!cell) return;
+        const startRect = cell.getBoundingClientRect();
+
+        let targetEl = null;
+
+        if (this.bossState.active) {
+            targetEl = document.getElementById('boss-target');
+        } else {
+            targetEl = document.getElementById(`goal-item-${key}`);
+        }
+
+        if (!targetEl) return;
+
+        const targetRect = targetEl.getBoundingClientRect();
+
+        const flyer = document.createElement('div');
+        flyer.classList.add('flying-item');
+        
+        flyer.style.position = 'fixed';
+        flyer.style.zIndex = '9999';
+        flyer.style.pointerEvents = 'none';
+        flyer.style.transition = 'all 0.7s cubic-bezier(0.19, 1, 0.22, 1)';
+        flyer.style.transformOrigin = 'center';
+        
+        flyer.innerText = emoji;
+        
+        flyer.style.left = `${startRect.left + startRect.width/4}px`; 
+        flyer.style.top = `${startRect.top + startRect.height/4}px`;
+        
+        document.body.appendChild(flyer);
+
+        requestAnimationFrame(() => {
+            const destX = targetRect.left + targetRect.width/2 - 20; 
+            const destY = targetRect.top + targetRect.height/2 - 20;
+
+            flyer.style.left = `${destX}px`;
+            flyer.style.top = `${destY}px`;
+            flyer.style.transform = 'scale(0.5)'; 
+        });
+
+        setTimeout(() => {
+            flyer.remove();
+            targetEl.classList.remove('target-pop'); 
+            void targetEl.offsetWidth; 
+            targetEl.classList.add('target-pop'); 
+        }, 700); 
+    }
+
     renderGrid() {
         this.boardEl.innerHTML = '';
         this.grid.forEach((row, rIndex) => {
@@ -457,6 +847,9 @@ export class Game {
                 const div = document.createElement('div');
                 div.classList.add('cell');
                 div.dataset.r = rIndex; div.dataset.c = cIndex;
+                
+                div.addEventListener('click', () => this.handleBoardClick(rIndex, cIndex));
+                
                 if (cellData) {
                     if (cellData.type === 'LAVA') { 
                         div.classList.add('lava'); 
@@ -484,26 +877,27 @@ export class Game {
         if(!this.dockEl) return;
         this.dockEl.innerHTML = '';
         
-        let customItems = null;
-        try {
-            if (this.currentMode === 'adventure' && this.currentLevelConfig) {
-                customItems = this.currentLevelConfig.items;
-            }
-        } catch (e) { console.warn("Erro itens nível", e); }
-
-        const getPieceSafe = (items) => {
-            try { return getRandomPiece(items); } 
-            catch(e) { return getRandomPiece(null); }
-        };
-
-        this.currentHand = [getPieceSafe(customItems), getPieceSafe(customItems), getPieceSafe(customItems)];
+        const customItems = (this.currentMode === 'adventure' && this.currentLevelConfig) 
+            ? this.currentLevelConfig.items : null;
         
-        this.currentHand.forEach((piece, index) => {
-            const slot = document.createElement('div');
-            slot.classList.add('dock-slot');
-            if (piece) this.createDraggablePiece(piece, index, slot);
-            this.dockEl.appendChild(slot);
-        });
+        let forceEasy = false;
+        if (this.currentLevelConfig && this.currentLevelConfig.type === 'bonus') {
+            let emptySlots = 0;
+            this.grid.forEach(r => r.forEach(c => { if(!c) emptySlots++ }));
+            if (emptySlots > 30) forceEasy = true; 
+        }
+
+        this.currentHand = [];
+        for(let i=0; i<3; i++) {
+            const piece = getRandomPiece(customItems);
+            if (forceEasy && piece.matrix.flat().filter(x=>x).length > 4) {
+                 this.currentHand.push(getRandomPiece(customItems)); 
+            } else {
+                 this.currentHand.push(piece);
+            }
+        }
+        
+        this.renderDock(); 
 
         setTimeout(() => { if (!this.checkMovesAvailable()) this.gameOver(); }, 100);
     }
@@ -514,6 +908,10 @@ export class Game {
         container.dataset.index = index;
         container.style.gridTemplateColumns = `repeat(${piece.matrix[0].length}, 1fr)`;
         container.style.gridTemplateRows = `repeat(${piece.matrix.length}, 1fr)`;
+        
+        container.addEventListener('click', (e) => {
+            this.handlePieceClick(index);
+        });
         
         piece.layout.forEach(row => {
             row.forEach(cellData => {
@@ -542,6 +940,8 @@ export class Game {
         let boardRect = null;
 
         const onStart = (e) => {
+            if (this.interactionMode === 'rotate') return;
+
             if (isDragging) return;
             if(this.audio) this.audio.playDrag();
             isDragging = true; 
@@ -600,24 +1000,36 @@ export class Game {
                 
                 el.remove(); 
                 
+                // Remove da memória
+                const index = parseInt(el.dataset.index);
+                if (!isNaN(index)) {
+                    this.currentHand[index] = null; 
+                }
+
+                let hasWon = false; 
+
                 try {
                     const damageDealt = this.checkLines(dropX, dropY); 
+                    
                     if (this.currentMode === 'adventure') {
                         if (this.bossState.active) {
                             this.processBossTurn(damageDealt);
+                            if (this.bossState.currentHp <= 0) hasWon = true; 
                         } else {
-                            this.checkVictoryConditions();
+                            hasWon = this.checkVictoryConditions();
                         }
                     } else {
-                        this.checkVictoryConditions();
+                        hasWon = this.checkVictoryConditions();
                     }
                 } catch(e) { console.error(e); }
 
-                const remainingPieces = this.dockEl.querySelectorAll('.draggable-piece');
-                if (remainingPieces.length === 0) {
-                    this.spawnNewHand();
-                } else {
-                    if (!this.checkMovesAvailable()) this.gameOver();
+                if (!hasWon) {
+                    const remainingPieces = this.dockEl.querySelectorAll('.draggable-piece');
+                    if (remainingPieces.length === 0) {
+                        this.spawnNewHand();
+                    } else {
+                        if (!this.checkMovesAvailable()) this.gameOver();
+                    }
                 }
             } else {
                 el.style.opacity = '1';
@@ -728,9 +1140,7 @@ export class Game {
                     const cellEl = this.boardEl.children[targetR * 8 + targetC];
                     cellEl.classList.add('filled');
                     this.applyColorClass(cellEl, cellData);
-                    if (typeof cellData === 'object' && cellData.type === 'ITEM') {
-                        cellEl.innerText = cellData.emoji;
-                    }
+                    if (cellData.type === 'ITEM') cellEl.innerText = cellData.emoji;
                 }
             }
         }
@@ -754,6 +1164,26 @@ export class Game {
             if (full) colsToClear.push(c);
         }
 
+        const cellsToExplode = [];
+        
+        rowsToClear.forEach(r => {
+            for(let c=0; c<this.gridSize; c++) cellsToExplode.push({r, c});
+        });
+        colsToClear.forEach(c => {
+            for(let r=0; r<this.gridSize; r++) cellsToExplode.push({r, c});
+        });
+
+        cellsToExplode.forEach(pos => {
+            const idx = pos.r * 8 + pos.c;
+            const cell = this.boardEl.children[idx];
+            if (cell && (cell.classList.contains('filled') || cell.classList.contains('lava'))) {
+                const colorClass = Array.from(cell.classList).find(cls => cls.startsWith('type-') || cls === 'lava') || 'type-normal';
+                
+                const rect = cell.getBoundingClientRect();
+                this.spawnExplosion(rect, colorClass);
+            }
+        });
+
         rowsToClear.forEach(r => { if(this.clearRow(r)) damageDealt = true; linesCleared++; });
         colsToClear.forEach(c => { if(this.clearCol(c)) damageDealt = true; linesCleared++; });
 
@@ -774,7 +1204,7 @@ export class Game {
         let foundDamage = false;
         for(let c=0; c<this.gridSize; c++) {
             if(this.grid[r][c]) {
-                if(this.collectItem(this.grid[r][c])) foundDamage = true; 
+                if(this.collectItem(r, c, this.grid[r][c])) foundDamage = true; 
                 this.grid[r][c] = null;
             }
         }
@@ -785,24 +1215,26 @@ export class Game {
         let foundDamage = false;
         for(let r=0; r<this.gridSize; r++) {
             if (this.grid[r][c]) { 
-                if(this.collectItem(this.grid[r][c])) foundDamage = true;
+                if(this.collectItem(r, c, this.grid[r][c])) foundDamage = true;
                 this.grid[r][c] = null;
             }
         }
         return foundDamage;
     }
 
-    collectItem(cellData) {
+    collectItem(r, c, cellData) {
         if (!cellData) return false;
         
         if (cellData.type === 'ITEM') {
             const key = cellData.key.toLowerCase(); 
+            
+            this.runFlyAnimation(r, c, key, cellData.emoji);
+
             if (this.currentGoals[key] !== undefined) {
                 this.collected[key] = (this.collected[key] || 0) + 1;
                 this.updateGoalsUI();
             }
             
-            // Dano fixo no boss ao coletar item
             if (this.currentMode === 'adventure' && this.bossState.active) {
                 this.damageBoss(5);
                 return true; 
@@ -860,7 +1292,12 @@ export class Game {
     damageBoss(amount) {
         this.bossState.currentHp = Math.max(0, this.bossState.currentHp - amount);
         this.updateBossUI();
-        if (this.bossState.currentHp <= 0) this.gameWon();
+        
+        if (this.bossState.currentHp <= 0) {
+            setTimeout(() => {
+                this.gameWon({}, []); 
+            }, 500);
+        }
     }
 
     updateBossUI() {
@@ -889,20 +1326,114 @@ export class Game {
         return false; 
     }
 
-    gameWon() {
+    gameWon(collectedGoals = {}, earnedRewards = []) {
         if(this.audio) this.audio.stopMusic();
         if(this.audio) { this.audio.playClear(3); this.audio.vibrate([100, 50, 100, 50, 200]); }
-        if(this.scoreWinEl) this.scoreWinEl.innerText = this.score;
-        if(this.modalWin) this.modalWin.classList.remove('hidden');
+        
+        const modal = this.modalWin;
+        const goalsGrid = document.getElementById('victory-goals-grid');
+        const rewardsGrid = document.getElementById('victory-rewards-grid');
+        const rewardsSection = document.getElementById('victory-rewards-section');
+        const scoreEl = document.getElementById('score-victory');
+
+        goalsGrid.innerHTML = '';
+        rewardsGrid.innerHTML = '';
+
+        if (Object.keys(collectedGoals).length === 0 && this.bossState.active) {
+             const bossData = this.currentLevelConfig.boss;
+             goalsGrid.innerHTML = `
+                <div class="victory-slot reward-highlight">
+                    <div class="slot-icon">${bossData.emoji}</div>
+                    <div class="slot-count">DERROTADO</div>
+                </div>`;
+        } else {
+            Object.keys(collectedGoals).forEach(key => {
+                const count = collectedGoals[key];
+                const emoji = EMOJI_MAP[key] || '📦';
+                
+                goalsGrid.innerHTML += `
+        <div class="result-slot">
+            <div class="slot-icon">${emoji}</div>
+            <div class="slot-count">${count}</div>
+        </div>`;
+            });
+        }
+
+        if (earnedRewards && earnedRewards.length > 0) {
+            rewardsSection.classList.remove('hidden');
+            earnedRewards.forEach(item => {
+                const emoji = EMOJI_MAP[item.type] || '🎁';
+                rewardsGrid.innerHTML += `
+        <div class="result-slot reward">
+            <div class="slot-icon">${emoji}</div>
+            <div class="slot-count">+${item.count}</div>
+        </div>`;
+            });
+        } else {
+            rewardsSection.classList.add('hidden');
+        }
+
+        scoreEl.innerText = this.score;
+        modal.classList.remove('hidden');
+
         if (this.currentMode === 'adventure' && this.currentLevelConfig) {
             const nextLevel = this.currentLevelConfig.id + 1;
             this.saveProgress(nextLevel);
         }
     }
 
-    gameOver() {
+gameOver() {
         if(this.audio) this.audio.stopMusic();
-        if(this.scoreOverEl) this.scoreOverEl.innerText = this.score;
+        
+        // 1. Elementos da Tela de Derrota
+        const scoreEl = document.getElementById('score-final');
+        const goalsGrid = document.getElementById('fail-goals-grid');
+        const rewardsSection = document.getElementById('fail-rewards-section');
+        
+        // 2. Preenche Pontuação
+        if(scoreEl) scoreEl.innerText = this.score;
+
+        // 3. Preenche Objetivos (Progresso até morrer)
+        if(goalsGrid) {
+            goalsGrid.innerHTML = '';
+            
+            // Se for Boss
+            if (this.bossState.active) {
+                const bossData = this.currentLevelConfig.boss;
+                // Calcula % de vida restante para mostrar quão perto foi
+                const hpPercent = Math.round((this.bossState.currentHp / this.bossState.maxHp) * 100);
+                
+                goalsGrid.innerHTML = `
+                    <div class="result-slot">
+                        <div class="slot-icon">${bossData.emoji}</div>
+                        <div class="slot-count">${hpPercent}% HP</div>
+                    </div>`;
+            } 
+            // Se for Coleta (Aventura/Casual)
+            else if (this.currentGoals) {
+                Object.keys(this.currentGoals).forEach(key => {
+                    const current = this.collected[key] || 0;
+                    const target = this.currentGoals[key];
+                    const emoji = EMOJI_MAP[key] || '📦';
+                    
+                    goalsGrid.innerHTML += `
+                        <div class="result-slot">
+                            <div class="slot-icon">${emoji}</div>
+                            <div class="slot-count">${current}/${target}</div>
+                        </div>`;
+                });
+            }
+        }
+
+        // 4. Preenche Recompensas (XP Parcial - Futuro)
+        // Por enquanto, escondemos ou mostramos vazio
+        if(rewardsSection) {
+            // Exemplo: Ganhar 10 XP mesmo perdendo
+            // rewardsSection.classList.remove('hidden'); 
+            rewardsSection.classList.add('hidden'); // Oculto por enquanto
+        }
+        
+        // 5. Mostra Modal
         if(this.modalOver) this.modalOver.classList.remove('hidden');
     }
 }

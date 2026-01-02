@@ -118,3 +118,27 @@ export const WORLDS = [
         unlocked: false
     }
 ];
+
+// --- CONFIGURAÇÃO DA FASE BÔNUS (SALA DO TESOURO) ---
+export const BONUS_LEVEL_CONFIG = {
+    id: 'bonus_daily',
+    type: 'bonus', // Tipo novo para identificarmos a lógica
+    name: 'Sala do Tesouro',
+    world: 'bonus',
+    bgImage: 'assets/images/bg-fire.png', // Pode usar a mesma ou uma de ouro
+    
+    // As 3 metas concorrentes (Bomba, Rotação, Troca)
+    goals: { 
+        'bomb': 10, 
+        'rotate': 1, 
+        'swap': 10 
+    },
+    
+    // Itens que cairão no tabuleiro
+    items: [
+        { key: 'NORMAL', weight: 60 }, // Blocos normais
+        { key: 'BOMB', emoji: '💣', weight: 15 },
+        { key: 'ROTATE', emoji: '🔄', weight: 15 },
+        { key: 'SWAP', emoji: '🔀', weight: 10 }
+    ]
+};
