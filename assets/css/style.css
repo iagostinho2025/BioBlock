@@ -4137,3 +4137,23 @@ html, body {
     70% { box-shadow: 0 0 0 8px rgba(251, 191, 36, 0); }
     100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
 }
+
+/* --- ATUALIZAÇÃO: ÍMÃ (Substitui Bomba) --- */
+
+/* Cor do botão do Ímã */
+.ctrl-btn.pwr-magnet { color: #d946ef; border-color: #d946ef; }
+
+/* Efeito visual quando um bloco é selecionado para ser movido */
+.magnet-selected {
+    animation: magnet-pulse 0.8s infinite alternate;
+    box-shadow: 0 0 15px #d946ef, inset 0 0 10px #d946ef;
+    border: 2px solid #fff !important;
+    z-index: 100;
+}
+
+@keyframes magnet-pulse {
+    from { transform: scale(0.95); filter: brightness(1); }
+    to { transform: scale(1.05); filter: brightness(1.3); }
+}
+
+

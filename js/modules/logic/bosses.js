@@ -1,6 +1,6 @@
 // Lógica dos Chefes e Elites
 export const BOSS_LOGIC = {
-    // ELITE NÍVEL 10
+    // ELITE NÍVEL 10: MAGMOR
     'magmor': {
         name: 'Magmor',
         emoji: '👺',
@@ -11,15 +11,28 @@ export const BOSS_LOGIC = {
             game.bossState.turnCount++;
 
             if (game.bossState.turnCount % 5 === 0) {
-                const emptyCells = [];
+                const validTargets = [];
+                
+                // Varre o grid procurando espaços vazios SEGUROS
                 game.grid.forEach((row, r) => {
                     row.forEach((cell, c) => {
-                        if (!cell) emptyCells.push({r, c});
+                        if (!cell) {
+                            // VERIFICAÇÃO DE SEGURANÇA (CORREÇÃO DO BUG)
+                            // Conta quantos itens já existem na linha e na coluna
+                            const rowCount = row.filter(x => x !== null).length;
+                            const colCount = game.grid.reduce((acc, currRow) => acc + (currRow[c] !== null ? 1 : 0), 0);
+
+                            // O Boss só pode colocar se NÃO for completar a linha (Max 7 de 8)
+                            // Se tiver 7, colocar o 8º causaria o bug visual
+                            if (rowCount < game.gridSize - 1 && colCount < game.gridSize - 1) {
+                                validTargets.push({r, c});
+                            }
+                        }
                     });
                 });
 
-                if (emptyCells.length > 0) {
-                    const target = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+                if (validTargets.length > 0) {
+                    const target = validTargets[Math.floor(Math.random() * validTargets.length)];
                     game.grid[target.r][target.c] = { type: 'OBSTACLE', key: 'coal', emoji: '⚫' };
                     game.renderGrid();
                     game.triggerScreenFlash('#57534e'); 
@@ -34,18 +47,16 @@ export const BOSS_LOGIC = {
         emoji: '🦅',
         maxHp: 35,
         onTurnEnd: (game) => {
-            // Inicializa variáveis de controle se não existirem
+            // Inicializa variáveis de controle
             if (typeof game.bossState.regenCounter === 'undefined') {
                 game.bossState.regenCounter = 0;
                 game.bossState.lastHpCheck = game.bossState.maxHp;
             }
 
-            // Verifica se tomou dano neste turno comparando com a vida anterior
+            // Verifica se tomou dano
             if (game.bossState.currentHp < game.bossState.lastHpCheck) {
-                // Tomou dano: Zera o contador de regeneração
                 game.bossState.regenCounter = 0;
             } else {
-                // Não tomou dano: Incrementa
                 game.bossState.regenCounter++;
             }
 
@@ -56,16 +67,14 @@ export const BOSS_LOGIC = {
                 game.updateBossUI();
                 game.triggerScreenFlash('#22c55e'); // Flash verde
                 
-                // Reseta o contador para precisar de mais 3 turnos
                 game.bossState.regenCounter = 0;
             }
 
-            // Atualiza a vida de referência para o próximo turno
             game.bossState.lastHpCheck = game.bossState.currentHp;
         }
     },
 
-    // BOSS NÍVEL 20
+    // BOSS NÍVEL 20: IGNIS
     'ignis': {
         name: 'Ignis',
         emoji: '🐉',
@@ -74,19 +83,33 @@ export const BOSS_LOGIC = {
             if (!game.bossState.turnCount) game.bossState.turnCount = 0;
             game.bossState.turnCount++;
 
-            // 1. Poder do Magmor (Carvão)
+            // 1. Poder do Magmor (Carvão) - COM A CORREÇÃO DE SEGURANÇA
             if (game.bossState.turnCount % 5 === 0) {
-                 const emptyCells = [];
-                 game.grid.forEach((row, r) => row.forEach((cell, c) => { if (!cell) emptyCells.push({r, c}); }));
-                 if (emptyCells.length > 0) {
-                     const target = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+                 const validTargets = [];
+                 
+                 game.grid.forEach((row, r) => {
+                    row.forEach((cell, c) => {
+                        if (!cell) {
+                            // Mesma verificação de segurança do Magmor
+                            const rowCount = row.filter(x => x !== null).length;
+                            const colCount = game.grid.reduce((acc, currRow) => acc + (currRow[c] !== null ? 1 : 0), 0);
+
+                            if (rowCount < game.gridSize - 1 && colCount < game.gridSize - 1) {
+                                validTargets.push({r, c});
+                            }
+                        }
+                    });
+                });
+
+                 if (validTargets.length > 0) {
+                     const target = validTargets[Math.floor(Math.random() * validTargets.length)];
                      game.grid[target.r][target.c] = { type: 'OBSTACLE', key: 'coal', emoji: '⚫' };
                      game.renderGrid();
                      game.triggerScreenFlash('#57534e');
                  }
             }
 
-            // 2. Poder da Fênix (Regen) - Usando a mesma lógica robusta
+            // 2. Poder da Fênix (Regen)
              if (typeof game.bossState.regenCounter === 'undefined') {
                 game.bossState.regenCounter = 0;
                 game.bossState.lastHpCheck = game.bossState.maxHp;
@@ -108,6 +131,7 @@ export const BOSS_LOGIC = {
             game.bossState.lastHpCheck = game.bossState.currentHp;
 
             // 3. PODER ESPECIAL: Petrificar Fogo
+            // (Não precisa de verificação de linha pois apenas troca um item existente por outro)
             if (game.bossState.turnCount % 7 === 0) {
                 let changed = false;
                 game.grid.forEach((row, r) => {

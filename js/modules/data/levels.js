@@ -118,21 +118,21 @@ export const WORLDS = [
 
 // --- CONFIGURAÇÃO DA FASE BÔNUS (SALA DO TESOURO) ---
 export const BONUS_LEVEL_CONFIG = {
-    id: 'bonus_daily', // ID atualizado conforme seu backup
+    id: 'bonus_daily', 
     type: 'bonus', 
     name: 'Sala do Tesouro',
     world: 'bonus',
-    bgImage: 'assets/img/bg_fire.png', // Caminho corrigido para evitar tela branca
+    bgImage: 'assets/img/bg_fire.png', 
     
-    // Metas da "Corrida" (Quem chegar a 10 ganha o item)
+    // Metas da "Corrida" (Agora com Ímã)
     goals: { 
-        'bomb': 10, 
-        'rotate': 10, // Ajustei de 1 para 10 para ter graça
+        'magnet': 10, // Substituiu 'bomb'
+        'rotate': 10, 
         'swap': 10 
     },
     
-    // Lista de itens que vão cair (Pesos definidos no shapes.js)
-    items: ['bomb', 'rotate', 'swap'],
+    // Lista de itens que vão cair
+    items: ['magnet', 'rotate', 'swap'],
     
     gridConfig: [] 
 };

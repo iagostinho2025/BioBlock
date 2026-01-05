@@ -39,9 +39,9 @@ export const ITEM_STATS = {
     'collision': { damage: 5,  weight: 10 }, 
     
     // ITENS BÔNUS
-    'bomb':      { damage: 1,  weight: 15 },
+    'magnet':    { damage: 1,  weight: 15 },
     'rotate':    { damage: 1,  weight: 15 },
-    'swap':      { damage: 1,  weight: 10 },
+    'swap':      { damage: 1,  weight: 15 },
 
     // Futuros
     'drop':      { damage: 1,  weight: 80 },

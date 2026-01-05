@@ -1,13 +1,14 @@
 export class PowersSystem {
     constructor(game) {
-        this.game = game; // Acesso ao Game principal
+        this.game = game;
+        this.magnetSource = null; // Armazena o bloco selecionado para mover
     }
 
-    // Gerenciador central de cliques no tabuleiro
+    // Gerenciador central
     handleBoardInteraction(mode, r, c) {
         switch (mode) {
-            case 'bomb':
-                return this.useBomb(r, c);
+            case 'magnet': // SUBSTITUIU A BOMB
+                return this.handleMagnetInteraction(r, c);
             case 'hero_thalion':
                 return this.useThalion(r, c);
             case 'hero_nyx':
@@ -19,32 +20,84 @@ export class PowersSystem {
         }
     }
 
-    // --- 1. BOMBA (Área 3x3) ---
-    useBomb(centerR, centerC) {
-        let exploded = false;
-        const size = this.game.gridSize;
+    // --- NOVO: ÍMÃ (REPOSICIONAR) ---
+    // Etapa 1: Clica no bloco que quer mover.
+    // Etapa 2: Clica na casa vazia para onde ele vai.
+    handleMagnetInteraction(r, c) {
+        const cellContent = this.game.grid[r][c];
+        const cellEl = this.game.boardEl.children[r * 8 + c];
 
-        for (let r = centerR - 1; r <= centerR + 1; r++) {
-            for (let c = centerC - 1; c <= centerC + 1; c++) {
-                if (r >= 0 && r < size && c >= 0 && c < size) {
-                    if (this.game.grid[r][c]) {
-                        this.triggerVisual(r, c, 'type-fire'); // Vermelho
-                        this.game.collectItem(r, c, this.game.grid[r][c]);
-                        this.game.grid[r][c] = null;
-                        exploded = true;
-                    }
+        // CASO 1: Nenhum bloco selecionado ainda (Etapa de Seleção)
+        if (!this.magnetSource) {
+            if (cellContent) {
+                // Seleciona o bloco
+                this.magnetSource = { r, c };
+                
+                // Feedback Visual
+                this.clearMagnetVisuals();
+                if (cellEl) cellEl.classList.add('magnet-selected');
+                
+                if(this.game.audio) this.game.audio.playClick();
+                this.game.effects.showFloatingTextCentered("ESCOLHA O DESTINO", "feedback-gold");
+            } else {
+                // Clicou no vazio sem ter selecionado nada
+                this.game.effects.showFloatingTextCentered("SELECIONE UM BLOCO", "text-good");
+                this.playError();
+            }
+            return false; // Ainda não gastou o item
+        }
+
+        // CASO 2: Bloco já selecionado (Etapa de Movimento)
+        else {
+            // Se clicou no MESMO bloco, cancela seleção
+            if (this.magnetSource.r === r && this.magnetSource.c === c) {
+                this.magnetSource = null;
+                this.clearMagnetVisuals();
+                return false;
+            }
+
+            // Se clicou em OUTRO bloco, troca a seleção
+            if (cellContent) {
+                this.magnetSource = { r, c };
+                this.clearMagnetVisuals();
+                if (cellEl) cellEl.classList.add('magnet-selected');
+                if(this.game.audio) this.game.audio.playClick();
+                return false;
+            }
+
+            // Se clicou em VAZIO -> MOVE!
+            if (!cellContent) {
+                const srcR = this.magnetSource.r;
+                const srcC = this.magnetSource.c;
+                const pieceToMove = this.game.grid[srcR][srcC];
+
+                // 1. Move os dados no Grid
+                this.game.grid[r][c] = pieceToMove;
+                this.game.grid[srcR][srcC] = null;
+
+                // 2. Efeitos
+                this.triggerVisual(srcR, srcC, 'type-normal'); // Efeito na saída
+                if(this.game.audio) {
+                    this.game.audio.playDrag(); // Som de movimento
+                    this.game.audio.playDrop();
                 }
+
+                // 3. Consome e Finaliza
+                this.game.powerUps.magnet--; // Consome Ímã
+                this.game.savePowerUps();
+                
+                this.magnetSource = null;
+                this.clearMagnetVisuals();
+                this.finalizeMove();
+                return true;
             }
         }
-
-        if (exploded) {
-            this.game.powerUps.bomb--;
-            this.game.savePowerUps();
-            if(this.game.audio) this.game.audio.playClear(2);
-            this.finalizeMove();
-            return true;
-        }
         return false;
+    }
+
+    clearMagnetVisuals() {
+        const selected = this.game.boardEl.querySelectorAll('.magnet-selected');
+        selected.forEach(el => el.classList.remove('magnet-selected'));
     }
 
     // --- 2. THALION (Horizontal - 3 Blocos) ---
@@ -52,11 +105,10 @@ export class PowersSystem {
         let hit = false;
         const size = this.game.gridSize;
 
-        // Loop: Esquerda, Centro, Direita
         for (let targetC = c - 1; targetC <= c + 1; targetC++) {
             if (targetC >= 0 && targetC < size) {
                 if (this.game.grid[r][targetC]) {
-                    this.triggerVisual(r, targetC, 'type-forest'); // Verde
+                    this.triggerVisual(r, targetC, 'type-forest'); 
                     this.game.collectItem(r, targetC, this.game.grid[r][targetC]);
                     this.game.grid[r][targetC] = null;
                     hit = true;
@@ -76,15 +128,13 @@ export class PowersSystem {
     }
 
     // --- 3. NYX (Vertical - Coluna Inteira) ---
-    // ALTERADO: Agora varre a COLUNA (r mudando), não a linha.
     useNyx(r, c) {
         let hit = false;
         const size = this.game.gridSize;
 
-        // Loop: A coluna inteira (0 a 7 na coluna c)
         for (let targetR = 0; targetR < size; targetR++) {
             if (this.game.grid[targetR][c]) {
-                this.triggerVisual(targetR, c, 'type-ice'); // Azul
+                this.triggerVisual(targetR, c, 'type-ice');
                 this.game.collectItem(targetR, c, this.game.grid[targetR][c]);
                 this.game.grid[targetR][c] = null;
                 hit = true;
@@ -103,31 +153,27 @@ export class PowersSystem {
     }
 
     // --- 4. JOGADOR (Corte em X Sequencial) ---
-    // ALTERADO: Golpe duplo em diagonal
     usePlayer(centerR, centerC) {
         let hitAny = false;
         const size = this.game.gridSize;
 
-        // Grupo 1: Diagonal Principal (Esquerda-Cima p/ Direita-Baixo) + Centro
         const slash1 = [
             { r: centerR - 1, c: centerC - 1 },
             { r: centerR,     c: centerC },
             { r: centerR + 1, c: centerC + 1 }
         ];
 
-        // Grupo 2: Diagonal Secundária (Direita-Cima p/ Esquerda-Baixo) - Sem centro (já foi)
         const slash2 = [
             { r: centerR - 1, c: centerC + 1 },
             { r: centerR + 1, c: centerC - 1 }
         ];
 
-        // Função auxiliar para processar lista de blocos
         const processHit = (list) => {
             let localHit = false;
             list.forEach(pos => {
                 if (pos.r >= 0 && pos.r < size && pos.c >= 0 && pos.c < size) {
                     if (this.game.grid[pos.r][pos.c]) {
-                        this.triggerVisual(pos.r, pos.c, 'type-mountain'); // Cinza/Prata
+                        this.triggerVisual(pos.r, pos.c, 'type-mountain');
                         this.game.collectItem(pos.r, pos.c, this.game.grid[pos.r][pos.c]);
                         this.game.grid[pos.r][pos.c] = null;
                         localHit = true;
@@ -138,34 +184,22 @@ export class PowersSystem {
             return localHit;
         };
 
-        // GOLPE 1
         const hit1 = processHit(slash1);
-        
-        // Se acertou algo no primeiro golpe ou o centro era válido (mesmo vazio, conta a intenção)
-        // Mas para gastar o poder, ideal é ter acertado algo.
-        // Vamos permitir que o segundo golpe aconteça mesmo se o primeiro falhar, se houver algo no X.
-        
-        // Verifica se tem algo no segundo golpe para decidir se consome
         const hasTargetsInSlash2 = slash2.some(pos => 
             pos.r >= 0 && pos.r < size && pos.c >= 0 && pos.c < size && this.game.grid[pos.r][pos.c]
         );
 
         if (hit1 || hasTargetsInSlash2) {
-            // Toca som e consome
             if(this.game.audio) this.game.audio.playSword();
             this.consumeHeroPower('player');
-            
-            // Renderiza o primeiro corte
             this.game.renderGrid();
             
-            // AGENDA O GOLPE 2 (Sequência)
+            // --- AJUSTE DE TEMPO: 1000ms ---
             setTimeout(() => {
                 processHit(slash2);
-                
-                // Finaliza tudo
                 this.finalizeMove();
                 
-            }, 1000); // 250ms de delay entre os cortes
+            }, 1000); // <--- AUMENTADO PARA 1 SEGUNDO
 
             return true;
         } else {

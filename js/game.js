@@ -10,7 +10,7 @@ const EMOJI_MAP = {
     'bee': '🐝', 'ghost': '👻', 'cop': '👮', 'ice_shard': '💎',
     
     // Power-Ups
-    'bomb': '💣', 'rotate': '🔄', 'swap': '🔀',
+    'magnet': '🧲', 'rotate': '🔄', 'swap': '🔀',
     
     // Mundo Fogo
     'fire': '🔥', 'heart': '❤️‍🔥', 'collision': '💥', 'volcano': '🌋',
@@ -83,17 +83,17 @@ export class Game {
     
     // --- Carregar PowerUps ---
     loadPowerUps() {
-        this.powerUps.bomb = parseInt(localStorage.getItem('powerup_bomb') || '0');
+        this.powerUps.magnet = parseInt(localStorage.getItem('powerup_magnet') || '0'); // Novo
         this.powerUps.rotate = parseInt(localStorage.getItem('powerup_rotate') || '0');
         this.powerUps.swap = parseInt(localStorage.getItem('powerup_swap') || '0');
-        this.updatePowerUpsUI();
+        this.updateControlsVisuals();
     }
 
     savePowerUps() {
-        localStorage.setItem('powerup_bomb', this.powerUps.bomb);
+        localStorage.setItem('powerup_magnet', this.powerUps.magnet); // Novo
         localStorage.setItem('powerup_rotate', this.powerUps.rotate);
         localStorage.setItem('powerup_swap', this.powerUps.swap);
-        this.updatePowerUpsUI();
+        this.updateControlsVisuals();
     }
 
     setupMenuEvents() {
@@ -301,50 +301,50 @@ export class Game {
     }
 	
 	renderControlsUI() {
-        // Limpa áreas antigas (se existirem no HTML estático)
         const oldPwr = document.getElementById('powerups-area');
         if (oldPwr) oldPwr.style.display = 'none';
         const oldHeroes = document.getElementById('hero-powers-area');
         if (oldHeroes) oldHeroes.remove();
         
-        // Busca ou cria a barra nova
         let controlsContainer = document.getElementById('controls-bar');
         
         if (!controlsContainer) {
             controlsContainer = document.createElement('div');
             controlsContainer.id = 'controls-bar';
             controlsContainer.className = 'controls-bar';
-            // Insere após o dock
             if (this.dockEl && this.dockEl.parentNode) {
                 this.dockEl.parentNode.insertBefore(controlsContainer, this.dockEl.nextSibling);
             }
         }
         controlsContainer.innerHTML = '';
 
-        // GRUPO ESQUERDA: Itens
+        // GRUPO ESQUERDA: Itens (AGORA COM ÍMÃ)
         const leftGroup = document.createElement('div');
         leftGroup.className = 'controls-group';
         
-        [{ id: 'bomb', icon: '💣' }, { id: 'rotate', icon: '🔄' }, { id: 'swap', icon: '🔀' }].forEach(p => {
+        [{ id: 'magnet', icon: '🧲' }, { id: 'rotate', icon: '🔄' }, { id: 'swap', icon: '🔀' }].forEach(p => {
             const btn = document.createElement('button');
             btn.className = `ctrl-btn pwr-${p.id}`;
             btn.id = `btn-pwr-${p.id}`;
             const count = this.powerUps[p.id] || 0;
+            // Mostra apenas "1" se tiver, ou "0" (Quantidade unitária conforme pedido)
+            // Mas mantendo a lógica numérica caso você dê recompensas
             btn.innerHTML = `${p.icon}<span class="ctrl-count">${count}</span>`;
+            
             if (count <= 0) btn.classList.add('disabled');
             btn.onclick = () => this.activatePowerUp(p.id);
             leftGroup.appendChild(btn);
         });
 
-        // GRUPO DIREITA: Heróis (Só Aventura)
+        // GRUPO DIREITA: Heróis
         const rightGroup = document.createElement('div');
         rightGroup.className = 'controls-group';
 
         if (this.currentMode === 'adventure') {
             const heroes = [
-                { id: 'thalion', icon: '🧝‍♂️'},
-                { id: 'nyx',     icon: '🐺'},
-                { id: 'player',  icon: '⚔️'} // Você
+                { id: 'thalion', icon: '🧝‍♂️' }, 
+                { id: 'nyx',     icon: '🐺' },
+                { id: 'player',  icon: '⚔️' } 
             ];
 
             heroes.forEach(h => {
@@ -363,8 +363,8 @@ export class Game {
     }
 
     updateControlsVisuals() {
-        // PowerUps
-        ['bomb', 'rotate', 'swap'].forEach(id => {
+        // PowerUps (AGORA COM MAGNET)
+        ['magnet', 'rotate', 'swap'].forEach(id => {
             const btn = document.getElementById(`btn-pwr-${id}`);
             if(!btn) return;
             btn.classList.remove('active-mode');
@@ -380,7 +380,7 @@ export class Game {
             ['thalion', 'nyx', 'player'].forEach(id => {
                 const btn = document.getElementById(`btn-hero-${id}`);
                 if(!btn) return;
-                btn.className = 'ctrl-btn hero'; // Reset
+                btn.className = 'ctrl-btn hero'; 
                 const state = this.heroState[id];
                 
                 if (state.used) btn.classList.add('used');
@@ -723,17 +723,19 @@ export class Game {
     checkVictoryConditions() {
         if (!this.currentGoals || Object.keys(this.currentGoals).length === 0) return false;
 
+        // LÓGICA ESPECIAL PARA FASE BÔNUS (SALA DO TESOURO)
         if (this.currentLevelConfig && this.currentLevelConfig.type === 'bonus') {
             const winners = [];
             
-            // 1. Carrega inventário
+            // 1. Carrega inventário atualizado (AGORA COM MAGNET)
             const inventory = {
-                bomb: parseInt(localStorage.getItem('powerup_bomb') || '0'),
+                magnet: parseInt(localStorage.getItem('powerup_magnet') || '0'), 
                 rotate: parseInt(localStorage.getItem('powerup_rotate') || '0'),
                 swap: parseInt(localStorage.getItem('powerup_swap') || '0')
             };
 
-            const isFullInventory = (inventory.bomb >= 3 && inventory.rotate >= 3 && inventory.swap >= 3);
+            // Verifica se o inventário está cheio (Max 3 de cada)
+            const isFullInventory = (inventory.magnet >= 3 && inventory.rotate >= 3 && inventory.swap >= 3);
 
             // 2. Verifica metas
             Object.keys(this.currentGoals).forEach(key => {
@@ -741,13 +743,15 @@ export class Game {
                 const targetAmount = this.currentGoals[key];
 
                 if (currentAmount >= targetAmount) {
-                    // Só ganha se precisar do item
+                    // Só ganha o item se tiver menos de 3, ou se estiver tudo cheio (pra não travar o jogo)
+                    // Como 'key' agora é 'magnet', 'inventory[key]' vai funcionar corretamente
                     if (inventory[key] < 3 || isFullInventory) {
                         winners.push(key);
                     }
                 }
             });
 
+            // Se ganhou algo, encerra a fase
             if (winners.length > 0) {
                 const rewardsList = [];
 
@@ -759,7 +763,7 @@ export class Game {
                     rewardsList.push({ type: powerUp, count: 1 });
                 });
                 
-                this.loadPowerUps();
+                this.loadPowerUps(); // Atualiza visualmente os botões
 
                 setTimeout(() => {
                     this.gameWon(this.collected, rewardsList);
@@ -770,6 +774,7 @@ export class Game {
             return false;
         }
 
+        // LÓGICA PADRÃO (Fases Normais e Boss)
         const allMet = Object.keys(this.currentGoals).every(key => {
             return (this.collected[key] || 0) >= this.currentGoals[key];
         });
@@ -938,21 +943,17 @@ export class Game {
         this.grid = Array(this.gridSize).fill().map(() => Array(this.gridSize).fill(null));
         this.score = 0;
         this.interactionMode = null;
-        
-        // Zera o combo ao reiniciar a partida
         this.comboState = { count: 0, lastClearTime: 0 }; 
         
-        // --- ATUALIZADO: Adicionado lineCounter no player ---
         this.heroState = {
             thalion: { unlocked: false, used: false },
             nyx: { unlocked: false, used: false },
-            player:  { unlocked: false, used: false, lineCounter: 0 } // Contador de linhas para o Ultimate
+            player:  { unlocked: false, used: false, lineCounter: 0 } 
         };
 
         this.bossState.active = (this.currentLevelConfig?.type === 'boss');
-        this.loadPowerUps(); 
+        this.loadPowerUps(); // Carrega o magnet aqui
         
-        // Renderiza a UI dos heróis (Somente Aventura)
         this.renderControlsUI(); 
 
         if(!this.bossState.active) {
