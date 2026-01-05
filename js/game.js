@@ -557,134 +557,111 @@ export class Game {
         
         this.toggleGlobalHeader(false);
 
-        // 1. LIMPEZA E PREPARAÇÃO (Reset)
-        container.className = 'world-select-layout'; 
-        
-        // --- CORREÇÃO AQUI ---
-        // Remove o 'display: none' que colocamos ao entrar na fase
-        container.style.display = ''; 
-        // ---------------------
+        // Limpa estilos antigos para garantir tela cheia
+        container.className = ''; 
+        container.style = ''; // Remove styles inline anteriores
+        container.style.display = 'block'; // Garante visibilidade
 
-        container.style.backgroundImage = 'none'; 
-        container.style.background = ''; 
-
-        // 2. APLICA O EFEITO VISUAL (SOMENTE AQUI NO MENU)
-        // Se for Fogo, adiciona as partículas
-        if (worldConfig.id === 'fire' || worldConfig.name.includes('Fogo')) {
-            container.classList.add('bg-particles-fire');
-        } 
-        else {
-            // Outros mundos (lógica padrão)
-            if (worldConfig.bgImage) {
-                container.style.backgroundImage = `url('${worldConfig.bgImage}')`;
-                container.style.backgroundSize = 'cover';
-                container.style.backgroundPosition = 'center';
-            } else {
-                container.style.background = '#0f172a'; 
-            }
-        }
-
-        // 3. CONSTRUÇÃO DA INTERFACE
+        // --- NOVO HTML LIMPO (Sem título, apenas mapa e botão) ---
         container.innerHTML = `
-            <div class="premium-world-header" style="margin-bottom: 30px;">
-                <button id="btn-map-back" class="btn-premium-back">⬅</button>
-                <h2 class="premium-title">${worldConfig.name}</h2>
-            </div>
-            <div id="level-grid-area" class="level-grid-layout"></div>
+            <button id="btn-map-back" class="floating-back-btn">⬅</button>
+            
+            <div id="world-map-bg" class="world-map-container full-screen-mode">
+                </div>
         `;
 
-        // 4. BOTÃO VOLTAR
+        // Configura a imagem de fundo
+        const mapBg = document.getElementById('world-map-bg');
+        if (worldConfig.bgImage) {
+            mapBg.style.backgroundImage = `url('${worldConfig.bgImage}')`;
+        } else {
+            mapBg.style.backgroundColor = '#1a0b0b'; // Cor escura caso falhe a imagem
+        }
+
+        // Configura o botão de voltar
         const mapBackBtn = document.getElementById('btn-map-back');
         if(mapBackBtn) {
             mapBackBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if(this.audio) this.audio.playBack();
                 
-                // Remove o efeito ao voltar para o menu principal
-                container.classList.remove('bg-particles-fire'); 
-                
+                // Limpa o HTML ao sair para não deixar o mapa fixo na tela
+                container.innerHTML = ''; 
                 this.showWorldSelect(); 
             });
         }
 
-        // 5. GRID DE FASES
-        const gridArea = document.getElementById('level-grid-area');
         const currentSave = this.loadProgress();
 
-        worldConfig.levels.forEach((level, index) => {
-            const levelNum = index + 1; 
-            const btn = document.createElement('button');
-            btn.classList.add('level-btn');
+        // --- FUNÇÃO PARA CRIAR BOTÕES (Mantida igual, apenas gera o SVG) ---
+        const createSvgButton = (levelData, isBonus = false) => {
+            const pos = levelData.mapPos || { x: 50, y: 50 }; 
+            const levelNum = isBonus ? '🎁' : levelData.id;
             
+            let statusClass = '';
             let isLocked = false;
-            
-            // Status (Travado, Atual, Completado)
-            if (level.id < currentSave) {
-                btn.classList.add('status-completed');
-            } else if (level.id === currentSave) {
-                btn.classList.add('status-current');
+
+            if (isBonus) {
+                statusClass = 'bonus';
+                if (currentSave <= 5) { isLocked = true; statusClass += ' locked'; }
             } else {
-                btn.classList.add('status-locked');
-                isLocked = true;
+                if (levelData.id < currentSave) statusClass = 'completed';
+                else if (levelData.id === currentSave) statusClass = 'current';
+                else { statusClass = 'locked'; isLocked = true; }
+                
+                if (levelData.type === 'boss') statusClass += ' boss';
             }
 
-            // Ícones Especiais
-            if (levelNum === 20) { 
-                btn.classList.add('type-boss');
-                btn.innerText = worldConfig.bossAvatar || '🐉';
-            } 
-            else if (levelNum === 10 || levelNum === 15) { 
-                btn.classList.add('type-elite');
-                btn.innerHTML = `${levelNum} <div class="elite-skull">💀</div>`;
-            } 
-            else { 
-                btn.innerText = levelNum;
-            }
+            const svgNS = "http://www.w3.org/2000/svg";
+            const svgBtn = document.createElementNS(svgNS, "svg");
+            svgBtn.setAttribute("class", `map-node-svg ${statusClass}`);
+            svgBtn.setAttribute("viewBox", "0 0 100 100");
+            
+            // Posicionamento absoluto
+            svgBtn.style.left = `${pos.x}%`;
+            svgBtn.style.top = `${pos.y}%`;
 
-            // --- CLICK NA FASE ---
-            btn.addEventListener('click', () => {
+            // Triângulo Invertido
+            const path = document.createElementNS(svgNS, "path");
+            path.setAttribute("d", "M 10 10 L 90 10 L 50 90 Z"); 
+            path.setAttribute("class", "node-shape");
+            svgBtn.appendChild(path);
+
+            // Texto
+            const text = document.createElementNS(svgNS, "text");
+            text.setAttribute("x", "50");
+            text.setAttribute("y", "45");
+            text.setAttribute("class", "node-text");
+            text.textContent = levelNum;
+            svgBtn.appendChild(text);
+
+            svgBtn.addEventListener('click', () => {
                 if (!isLocked) {
                     if(this.audio) this.audio.playClick();
-                    this.toggleGlobalHeader(true); 
+                    this.toggleGlobalHeader(true);
                     
-                    // 1. Remove o efeito e ESCONDE o container do mapa
-                    container.classList.remove('bg-particles-fire');
-                    container.style.display = 'none'; // <--- Isso que causava o problema se não resetasse depois
+                    // Esconde o mapa e limpa classes
+                    container.style.display = 'none';
+                    document.body.className = '';
                     
-                    // 2. Limpa qualquer classe do corpo do jogo (Fundo Limpo)
-                    document.body.className = ''; 
-                    
-                    this.startAdventureLevel(level);
+                    const configToStart = isBonus ? BONUS_LEVEL_CONFIG : levelData;
+                    this.startAdventureLevel(configToStart);
                 } else {
                     if(this.audio) this.audio.vibrate(50);
                 }
             });
-            gridArea.appendChild(btn);
 
-            // Botão Bônus (Nível 19)
-            if (levelNum === 19) {
-                const bonusBtn = document.createElement('button');
-                bonusBtn.classList.add('level-btn', 'type-bonus'); 
-                bonusBtn.innerHTML = '🎁'; 
-                
-                if (!isLocked) { 
-                    bonusBtn.addEventListener('click', () => {
-                        if(this.audio) this.audio.playClick();
-                        this.toggleGlobalHeader(true);
-                        
-                        // Limpeza igual à fase normal
-                        container.classList.remove('bg-particles-fire');
-                        container.style.display = 'none';
-                        document.body.className = ''; 
-                        
-                        this.startAdventureLevel(BONUS_LEVEL_CONFIG);
-                    });
-                } else {
-                    bonusBtn.classList.add('status-locked');
-                }
-                gridArea.appendChild(bonusBtn);
-            }
+            return svgBtn;
+        };
+
+        // --- GERA OS BOTÕES ---
+        worldConfig.levels.forEach(level => {
+            mapBg.appendChild(createSvgButton(level));
         });
+
+        if (BONUS_LEVEL_CONFIG && BONUS_LEVEL_CONFIG.mapPos) {
+             mapBg.appendChild(createSvgButton(BONUS_LEVEL_CONFIG, true));
+        }
     }
 
     // --- GAMEPLAY CORE ---
