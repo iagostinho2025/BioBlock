@@ -27,7 +27,7 @@ export const WORLDS = [
         levels: [
             // --- PARTE INFERIOR (Subindo) ---
             // FASE 1 (Base direita embaixo)
-            { id: 1, type: 'normal', goals: { fire: 5 }, items: ['fire'], gridConfig: [], mapPos: { x: 78, y: 83 } },
+            { id: 1, type: 'normal', goals: { fire: 5 }, items: ['fire'], gridConfig: [], mapPos: { x: 42, y: 91 } },
             // FASE 2 (Centro embaixo)
             { id: 2, type: 'normal', goals: { fire: 8 }, items: ['fire'], gridConfig: [], mapPos: { x: 44, y: 81 } },
             // FASE 3 (Esquerda embaixo)
