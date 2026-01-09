@@ -4170,14 +4170,34 @@ html, body {
 }
 
 /* O botão triangular SVG */
+/* 1. FASES NORMAIS (Base - Pequeno) */
 .map-node-svg {
     position: absolute;
-    width: 60px;  /* Tamanho do botão */
-    height: 60px;
-    transform: translate(-50%, -50%); /* Centraliza o botão no ponto X,Y exato */
+    width: 45px;  /* Tamanho reduzido (antes era 64px) */
+    height: 45px;
+    transform: translate(-50%, -50%);
     cursor: pointer;
-    filter: drop-shadow(0 4px 4px rgba(0,0,0,0.4));
-    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Efeito elástico */
+    z-index: 10;
+}
+
+/* 2. ELITE (Médio - Caveira) */
+.map-node-svg.elite {
+    width: 75px;  /* Bem maior que o normal */
+    height: 75px;
+    z-index: 15; /* Fica acima dos normais se encostar */
+}
+
+/* 3. BOSS FINAL (Gigante - Coroa) */
+.map-node-svg.final-boss {
+    width: 90px; /* Imponente */
+    height: 90px;
+    z-index: 20;
+}
+
+/* 4. BÔNUS (Médio) */
+.map-node-svg.bonus {
+    width: 70px;
+    height: 70px;
 }
 
 /* Efeito de Hover */
@@ -4719,4 +4739,84 @@ body {
     opacity: 0.8 !important;
     transform: translateX(-50%) !important;
     background: radial-gradient(ellipse at center, rgba(0,0,0,0.8) 0%, transparent 70%) !important;
+}
+
+/* =========================================
+   ESTILO FINAL DO MAPA (ESCUDOS)
+   ========================================= */
+
+/* Tamanho e Posição Base */
+.map-node-svg {
+    position: absolute;
+    width: 55px;  /* Tamanho reduzido (antes era 64px) */
+    height: 55px;
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+    z-index: 10;
+}
+
+/* 2. ELITE (Médio - Caveira) */
+.map-node-svg.elite {
+    width: 75px;  /* Bem maior que o normal */
+    height: 75px;
+    z-index: 15; /* Fica acima dos normais se encostar */
+}
+
+/* 3. BOSS FINAL (Gigante - Coroa) */
+.map-node-svg.final-boss {
+    width: 90px; /* Imponente */
+    height: 90px;
+    z-index: 20;
+}
+
+/* 4. BÔNUS (Médio) */
+.map-node-svg.bonus {
+    width: 70px;
+    height: 70px;
+}
+
+/* FASE ATUAL: Única que tem animação */
+.map-node-svg.current {
+    z-index: 50;
+    /* Adicionamos um filtro estático forte + a animação */
+    filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.8));
+    animation: shield-pulse 2s infinite ease-in-out;
+}
+
+/* Animação ajustada para pulsar o brilho */
+@keyframes shield-pulse {
+    0% { 
+        transform: translate(-50%, -50%) scale(1); 
+        filter: drop-shadow(0 0 5px rgba(251, 191, 36, 0.6)); 
+    }
+    50% { 
+        transform: translate(-50%, -50%) scale(1.1); 
+        /* Brilho máximo no pico da animação */
+        filter: drop-shadow(0 0 20px rgba(255, 100, 0, 0.9)); 
+    }
+    100% { 
+        transform: translate(-50%, -50%) scale(1); 
+        filter: drop-shadow(0 0 5px rgba(251, 191, 36, 0.6)); 
+    }
+}
+
+/* FASE BLOQUEADA: Apenas opacidade (a cor vem do JS) */
+/* FASE BLOQUEADA: Única com opacidade reduzida */
+.map-node-svg.locked {
+    opacity: 10; /* Um pouco mais visível que antes */
+    filter: grayscale(0.5); 
+    cursor: default;
+}
+
+/* FASE COMPLETADA: Garantir opacidade total para a rachadura aparecer bem */
+.map-node-svg.completed {
+    opacity: 1 !important;
+    filter: none !important; /* Remove filtros antigos se houver */
+    transform: translate(-50%, -50%) translateY(4px);
+}
+
+/* Texto dentro do escudo */
+.glossy-text {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 800;
 }

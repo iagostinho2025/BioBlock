@@ -610,152 +610,168 @@ export class Game {
         const currentSave = this.loadProgress();
 
         // --- FUNÇÃO AUXILIAR: BOTÕES SVG (RACHADOS) ---
+        // --- FUNÇÃO DE ESCUDOS (CORES VIVAS + RACHADURA 3D) ---
         const createSvgButton = (levelData, isBonus = false) => {
             const pos = levelData.mapPos || { x: 50, y: 50 }; 
+            const levelNum = isBonus ? '🎁' : levelData.id;
             
-            let statusClass = '';
-            let isLocked = false;
-            let isCompleted = false; // Nova flag para controle
-            let shapeType = 'normal'; 
-
-            // 1. Define o Tipo
+            // --- 1. DETECTAR ESTADO ---
+            let state = 'locked';
             if (isBonus) {
-                statusClass = 'bonus';
-                shapeType = 'bonus';
+                if (currentSave > 5) state = 'unlocked';
             } else {
-                if (levelData.type === 'boss') {
-                    if (levelData.id === 20) {
-                        statusClass = 'final-boss'; 
-                        shapeType = 'final-boss';
-                    } else {
-                        statusClass = 'elite'; 
-                        shapeType = 'elite';
-                    }
+                if (levelData.id < currentSave) state = 'completed';
+                else if (levelData.id === currentSave) state = 'current';
+                else state = 'locked';
+            }
+
+            // --- 2. DETECTAR TIPO E ÍCONE ---
+            let type = 'normal';
+            let emojiIcon = null; 
+
+            if (isBonus) {
+                type = 'bonus';
+                emojiIcon = '🎁';
+            } else if (levelData.type === 'boss') {
+                if (levelData.id === 20) {
+                    type = 'final-boss';
+                    emojiIcon = '👑'; 
                 } else {
-                    shapeType = 'normal';
+                    type = 'elite';
+                    emojiIcon = '💀'; 
                 }
             }
-
-            // 2. Define o Estado
-            if (isBonus) {
-                if (currentSave <= 5) { isLocked = true; statusClass += ' locked'; }
-            } else {
-                if (levelData.id < currentSave) {
-                    statusClass += ' completed';
-                    isCompleted = true; // Marca como completa
-                }
-                else if (levelData.id === currentSave) statusClass += ' current';
-                else { isLocked = true; statusClass += ' locked'; }
+            
+            // Se for fase atual normal, usa Espadas
+            if (state === 'current' && emojiIcon === null) {
+                emojiIcon = '⚔️'; 
             }
 
+            // --- 3. DEFINIR CORES VIVAS (SÓLIDAS) ---
+            const palettes = {
+                // Azul mais elétrico e profundo
+                'normal':     { top: '#2563eb', bot: '#172554', stroke: '#60a5fa' }, 
+                // Vermelho sangue vivo
+                'elite':      { top: '#dc2626', bot: '#7f1d1d', stroke: '#fca5a5' }, 
+                // Ouro rico e laranja
+                'final-boss': { top: '#f59e0b', bot: '#92400e', stroke: '#fcd34d' }, 
+                // Roxo neon
+                'bonus':      { top: '#c026d3', bot: '#701a75', stroke: '#e879f9' }, 
+                // Cinza chumbo escuro (para contraste com a rachadura)
+                'completed':  { top: '#475569', bot: '#0f172a', stroke: '#1e293b' }  
+            };
+
+            const p = (state === 'completed') ? palettes['completed'] : palettes[type];
+
+            // Borda Dourada para a fase atual
+            let finalStroke = p.stroke;
+            let finalStrokeWidth = "2";
+            
+            if (state === 'current') {
+                finalStroke = "#fbbf24"; 
+                finalStrokeWidth = "4";  
+            }
+
+            // --- 4. CRIAR O SVG ---
             const svgNS = "http://www.w3.org/2000/svg";
             const svgBtn = document.createElementNS(svgNS, "svg");
             const uniqueId = `btn-${isBonus ? 'bonus' : levelData.id}`;
             
-            // Adiciona classes para flutuação (estática)
-            svgBtn.setAttribute("class", `map-node-svg style-glossy floating-node ${statusClass}`);
+            let cssClasses = `map-node-svg style-shield floating-node ${state} ${type}`;
+			if (state === 'current') cssClasses += ' current';
+            svgBtn.setAttribute("class", cssClasses);
             svgBtn.setAttribute("viewBox", "0 0 100 100");
             svgBtn.style.left = `${pos.x}%`;
             svgBtn.style.top = `${pos.y}%`;
-
-            // Adiciona delay aleatório na animação (apenas se for current)
             svgBtn.style.setProperty('--i', Math.random() * 5);
 
-            // --- GRADIENTES ---
+            // --- 5. GRADIENTES ---
             const defs = document.createElementNS(svgNS, "defs");
             defs.innerHTML = `
                 <linearGradient id="gradMain-${uniqueId}" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" class="grad-stop-top" />
-                    <stop offset="100%" class="grad-stop-bottom" />
+                    <stop offset="0%" stop-color="${p.top}" stop-opacity="1" />
+                    <stop offset="100%" stop-color="${p.bot}" stop-opacity="1" />
                 </linearGradient>
+                
                 <linearGradient id="gradShine-${uniqueId}" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stop-color="white" stop-opacity="0.6" />
-                    <stop offset="40%" stop-color="white" stop-opacity="0.1" />
-                    <stop offset="100%" stop-color="white" stop-opacity="0" />
+                    <stop offset="0%" stop-color="white" stop-opacity="0.3" />
+                    <stop offset="60%" stop-color="white" stop-opacity="0" />
                 </linearGradient>
+                
+                <radialGradient id="gradShadow-${uniqueId}" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+                    <stop offset="0%" stop-color="black" stop-opacity="0.6" />
+                    <stop offset="100%" stop-color="black" stop-opacity="0" />
+                </radialGradient>
             `;
             svgBtn.appendChild(defs);
 
-            // --- CONFIGURAÇÃO ---
-            let shapePath = "";
-            let shinePath = ""; 
-            let emojiIcon = "";
-            let textY = "55"; 
-            let textSize = "34px"; 
+            // --- 6. SOMBRA CHÃO ---
+            const shadow = document.createElementNS(svgNS, "ellipse");
+            shadow.setAttribute("cx", "50"); shadow.setAttribute("cy", "95");
+            shadow.setAttribute("rx", "25"); shadow.setAttribute("ry", "6");
+            shadow.setAttribute("fill", state === 'completed' ? "rgba(0,0,0,0.8)" : `url(#gradShadow-${uniqueId})`);
+            svgBtn.appendChild(shadow);
 
-            if (shapeType === 'bonus') {
-                shapePath = "M 50 5 L 95 50 L 50 95 L 5 50 Z"; 
-                shinePath = "M 50 10 L 85 50 L 50 50 L 15 50 Z";
-                emojiIcon = "🎁";
-                textY = "52";
-            } 
-            else if (shapeType === 'elite') {
-                shapePath = "M 5 10 L 95 10 L 95 30 C 95 70 50 100 50 100 C 50 100 5 70 5 30 Z";
-                shinePath = "M 10 15 L 90 15 L 90 30 C 90 50 50 65 50 65 C 50 65 10 50 10 30 Z";
-                emojiIcon = "💀";
-                textY = "50"; 
-                textSize = "36px";
-            } 
-            else if (shapeType === 'final-boss') {
-                shapePath = "M 5 10 L 95 10 L 95 30 C 95 70 50 100 50 100 C 50 100 5 70 5 30 Z";
-                shinePath = "M 10 15 L 90 15 L 90 30 C 90 50 50 65 50 65 C 50 65 10 50 10 30 Z";
-                emojiIcon = "👑";
-                textY = "49";
-                textSize = "40px";
-            } 
-            else {
-                shapePath = "M 10 10 L 90 10 L 90 40 C 90 70 50 95 50 95 C 50 95 10 70 10 40 Z";
-                shinePath = "M 15 15 L 85 15 L 85 35 C 85 55 50 75 50 75 C 50 75 15 55 15 35 Z";
-                emojiIcon = "⭐";
-                textY = "51";
-            }
-
-            // --- CAMADA 0: SOMBRA NO CHÃO ---
-            const shadowEllipse = document.createElementNS(svgNS, "ellipse");
-            shadowEllipse.setAttribute("cx", "50");
-            shadowEllipse.setAttribute("cy", "95");
-            shadowEllipse.setAttribute("rx", "30");
-            shadowEllipse.setAttribute("ry", "8");
-            // Se estiver completa, a sombra é fixa e preta
-            shadowEllipse.setAttribute("fill", isCompleted ? "rgba(0,0,0,0.8)" : `url(#gradShadow-${uniqueId})`);
-            svgBtn.appendChild(shadowEllipse);
-
-            // --- CAMADA 1: ESCUDO BASE ---
+            // --- 7. ESCUDO BASE ---
+            const shieldPath = "M 50 5 L 90 20 v 25 c 0 30 -25 50 -40 55 c -15 -5 -40 -25 -40 -55 v -25 Z";
             const pathBase = document.createElementNS(svgNS, "path");
-            pathBase.setAttribute("d", shapePath);
-            pathBase.setAttribute("class", "node-base");
+            pathBase.setAttribute("d", shieldPath);
             pathBase.setAttribute("fill", `url(#gradMain-${uniqueId})`);
+            pathBase.setAttribute("stroke", finalStroke);
+            pathBase.setAttribute("stroke-width", finalStrokeWidth);
             svgBtn.appendChild(pathBase);
 
-            // --- NOVO: CAMADA DE RACHADURA (Só se completou) ---
-            if (isCompleted) {
-                const crackPath = document.createElementNS(svgNS, "path");
-                // Desenho de um raio/rachadura cruzando o escudo
-                crackPath.setAttribute("d", "M 25 20 L 45 40 L 35 55 L 60 75 M 55 30 L 65 40");
-                crackPath.setAttribute("class", "node-crack");
-                svgBtn.appendChild(crackPath);
+            // --- 8. RACHADURA 3D (HIGHLIGHTED) ---
+            if (state === 'completed') {
+                const crackD = "M 35 30 L 50 50 L 40 65 M 60 40 L 50 50 L 55 70";
+                
+                // Camada 1: Sombra da rachadura (Preto Grosso)
+                const crackShadow = document.createElementNS(svgNS, "path");
+                crackShadow.setAttribute("d", crackD);
+                crackShadow.setAttribute("fill", "none");
+                crackShadow.setAttribute("stroke", "black");
+                crackShadow.setAttribute("stroke-width", "4"); // Bem grosso
+                crackShadow.setAttribute("opacity", "0.8");
+                svgBtn.appendChild(crackShadow);
+
+                // Camada 2: Luz da rachadura (Branco Fino e Deslocado)
+                // Isso cria o efeito de "borda quebrada" brilhando
+                const crackHighlight = document.createElementNS(svgNS, "path");
+                crackHighlight.setAttribute("d", crackD);
+                crackHighlight.setAttribute("fill", "none");
+                crackHighlight.setAttribute("stroke", "rgba(255,255,255,0.3)");
+                crackHighlight.setAttribute("stroke-width", "1");
+                crackHighlight.setAttribute("transform", "translate(1, 1)"); // Leve deslocamento
+                svgBtn.appendChild(crackHighlight);
             }
 
-            // --- CAMADA 2: BRILHO (Opcional em completados, mas deixamos pra manter volume) ---
+            // --- 9. BRILHO GLOSSY ---
+            const shinePath = "M 50 10 L 80 22 v 20 c 0 20 -15 35 -30 40 c -15 -5 -30 -20 -30 -40 v -20 Z";
             const pathShine = document.createElementNS(svgNS, "path");
             pathShine.setAttribute("d", shinePath);
             pathShine.setAttribute("fill", `url(#gradShine-${uniqueId})`);
             pathShine.style.pointerEvents = "none";
             svgBtn.appendChild(pathShine);
 
-            // --- CAMADA 3: EMOJI ---
+            // --- 10. TEXTO ---
             const text = document.createElementNS(svgNS, "text");
             text.setAttribute("x", "50");
-            text.setAttribute("y", textY);
-            text.setAttribute("class", "node-text glossy-text");
-            text.style.fontSize = textSize;
-            text.textContent = emojiIcon;
+            text.setAttribute("y", "62");
+            text.setAttribute("text-anchor", "middle");
+            text.setAttribute("class", "glossy-text");
+            text.style.pointerEvents = "none";
+            
+            // Texto mais brilhante para ler em cima do escudo escuro
+            text.style.fill = (state === 'completed') ? '#94a3b8' : '#ffffff';
+            text.style.fontSize = emojiIcon ? "34px" : "28px";
+            text.style.textShadow = "0 2px 4px rgba(0,0,0,0.8)"; // Sombra mais forte no texto
+            
+            text.textContent = emojiIcon || levelNum;
             svgBtn.appendChild(text);
 
-            // Evento Click
+            // --- EVENTO ---
             svgBtn.addEventListener('click', () => {
-                // Se completado, pode rejogar? Geralmente sim, mas sem feedback de vibração
-                if (isLocked) {
+                if (state === 'locked') {
                     if(this.audio) this.audio.vibrate(50);
                     return; 
                 }
