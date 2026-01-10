@@ -85,7 +85,7 @@ export class Game {
 	// Adicione logo após o constructor ou antes do start()
     preloadAssets() {
         const imagesToLoad = [
-            'assets/img/map_volcano.jpg', // <--- Coloque aqui o nome exato (ou .webp se mudou)
+            'assets/img/map_volcano.jpg', // <--- Coloque aqui o nome exato (ou .jpg se mudou)
             // 'assets/img/bg_water.png',  // Pode adicionar os outros mundos aqui
             // 'assets/img/bg_forest.png'
         ];
@@ -475,56 +475,39 @@ export class Game {
     showWorldSelect() {
         const container = document.getElementById('levels-container');
         
-        // --- LIMPEZA DE TELA (NOVO) ---
+        // 1. Configura o layout da tela (Reset Total)
         if (container) {
-            // Remove qualquer imagem de fundo ou cor inline deixada pelas fases
-            container.style.backgroundImage = '';
-            container.style.background = '';
-            container.style.display = ''; // Garante que esteja visível
-            
-            // Remove classes de efeitos (como as partículas de fogo)
-            container.classList.remove('bg-particles-fire');
-            
-            // Define a classe base do layout
-            container.className = 'world-select-layout';
+            container.style = ''; // Remove estilos inline antigos
+            container.className = 'world-select-layout'; // Aplica a classe de tela cheia
         }
 
         this.showScreen(this.screenLevels); 
-        this.toggleGlobalHeader(false); 
+        this.toggleGlobalHeader(false); // Esconde moedas/nível
 
         if(!container) return;
 
-        // Renderiza o cabeçalho com o botão de história
+        // 2. Renderiza APENAS os Botões Flutuantes e o Grid
+        // Sem títulos, sem barras de fundo.
         container.innerHTML = `
-            <div class="premium-world-header" style="margin-bottom: 50px;">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <button id="btn-world-back-internal" class="btn-premium-back">⬅</button>
-                    <button id="btn-replay-story" class="btn-story-replay" title="Rever História">📜</button>
-                </div>
-                <h2 class="premium-title">Modo Aventura</h2>
-            </div>
+            <button id="btn-world-back-internal" class="btn-floating-top-left">⬅</button>
+            <button id="btn-replay-story" class="btn-floating-top-right" title="História">📜</button>
+            
             <div class="worlds-grid" id="worlds-grid"></div>
         `;
 
-        // Botão Voltar (Vai para o Menu Principal)
+        // Eventos dos botões
         const backBtn = document.getElementById('btn-world-back-internal');
         if (backBtn) {
-            // Clona para remover listeners antigos e evitar bugs
-            const newBackBtn = backBtn.cloneNode(true);
-            backBtn.parentNode.replaceChild(newBackBtn, backBtn);
-            
-            newBackBtn.addEventListener('click', (e) => {
+            backBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 if(this.audio) this.audio.playBack();
                 
-                // Limpa tudo e volta pro menu
+                // Limpa classes para não afetar outras telas
                 container.className = '';
-                container.innerHTML = '';
                 this.showScreen(this.screenMenu);
             });
         }
-
-        // Botão Rever História
+        
         const replayBtn = document.getElementById('btn-replay-story');
         if (replayBtn) {
             replayBtn.addEventListener('click', () => {
@@ -533,37 +516,83 @@ export class Game {
             });
         }
 
+        // 3. Renderiza as Ilhas
         const grid = document.getElementById('worlds-grid');
         const currentSave = this.loadProgress(); 
 
+        // Mapeamento das imagens
+        const worldImages = {
+            'tutorial_world': 'assets/img/icon_world_tutorial.jpg',
+            'fire_world':     'assets/img/icon_world_fire.jpg',
+            'forest_world':   'assets/img/icon_world_forest.jpg',
+            'mountain_world': 'assets/img/icon_world_mountain.jpg',
+            'desert_world':   'assets/img/icon_world_desert.jpg',
+            'castle_world':   'assets/img/icon_world_castle.jpg'
+        };
+
         WORLDS.forEach((world, index) => {
-            const btn = document.createElement('div');
-            btn.classList.add('world-card');
-            const requiredLevel = (index * 20) + 1;
-            const isLocked = currentSave < requiredLevel && index > 0;
+            const worldItem = document.createElement('div');
+            
+            // Posicionamento Livre (Absolute)
+            worldItem.style.position = 'absolute';
+            
+            // Pega posição do levels.js
+            const pos = world.worldPos || { x: 50, y: 50 };
+            worldItem.style.left = pos.x + '%';
+            worldItem.style.top = pos.y + '%';
+            worldItem.style.transform = 'translate(-50%, -50%)';
+            
+            // Flex para alinhar
+            worldItem.style.display = 'flex';
+            worldItem.style.flexDirection = 'column';
+            worldItem.style.alignItems = 'center';
+            worldItem.style.zIndex = '10'; // Garante que a ilha fique acima do fundo
 
-            if (isLocked) {
-                btn.classList.add('world-locked');
-                btn.innerHTML += `<div class="lock-icon">🔒</div>`;
-            }
+            // Lógica de Bloqueio
+            let firstLevelId = world.levels[0].id;
+            const isLocked = currentSave < firstLevelId;
 
-            btn.innerHTML += `
-                <div class="world-boss-circle" style="background: ${world.gradient}">
-                    ${world.bossAvatar}
-                </div>
-                <div class="world-card-title"><span>${world.emoji}</span> ${world.name}</div>
-                <div class="world-card-info">${world.totalLevels} Fases<span class="boss-highlight">Boss ${world.bossName}</span></div>
-            `;
+            // Imagem da Ilha
+            const img = document.createElement('img');
+            img.src = worldImages[world.id] || 'assets/img/icon_world_fire.jpg';
+            img.alt = world.name;
+            img.className = 'world-card-image';
+            
+            if (isLocked) img.classList.add('locked');
 
-            btn.addEventListener('click', () => {
+            img.addEventListener('click', () => {
                 if (!isLocked) {
                     if(this.audio) this.audio.playClick();
                     this.openWorldMap(world); 
                 } else {
                     if(this.audio) this.audio.vibrate(50);
+                    this.effects.showFloatingTextCentered("BLOQUEADO", "feedback-bad");
                 }
             });
-            grid.appendChild(btn);
+
+            worldItem.appendChild(img);
+
+            // Cadeado
+            if (isLocked) {
+                const lock = document.createElement('div');
+                lock.innerHTML = '🔒';
+                lock.style.position = 'absolute';
+                lock.style.top = '50%';
+                lock.style.left = '50%';
+                lock.style.transform = 'translate(-50%, -50%)';
+                lock.style.fontSize = '2rem';
+                lock.style.textShadow = '0 2px 5px black';
+                lock.style.pointerEvents = 'none';
+                worldItem.appendChild(lock);
+            }
+
+            // Nome do Mundo
+            const label = document.createElement('div');
+            label.className = 'world-label';
+            label.innerText = world.name;
+            worldItem.appendChild(label);
+
+            grid.appendChild(worldItem);
         });
     }
 
@@ -610,7 +639,7 @@ export class Game {
         const currentSave = this.loadProgress();
 
         // --- FUNÇÃO AUXILIAR: BOTÕES SVG (RACHADOS) ---
-        // --- FUNÇÃO DE ESCUDOS (CORES VIVAS + RACHADURA 3D) ---
+        // --- FUNÇÃO DE ESCUDOS (BÔNUS LIBERADO) ---
         const createSvgButton = (levelData, isBonus = false) => {
             const pos = levelData.mapPos || { x: 50, y: 50 }; 
             const levelNum = isBonus ? '🎁' : levelData.id;
@@ -618,7 +647,8 @@ export class Game {
             // --- 1. DETECTAR ESTADO ---
             let state = 'locked';
             if (isBonus) {
-                if (currentSave > 5) state = 'unlocked';
+                // ALTERAÇÃO AQUI: Bônus sempre liberado!
+                state = 'unlocked'; 
             } else {
                 if (levelData.id < currentSave) state = 'completed';
                 else if (levelData.id === currentSave) state = 'current';
@@ -627,7 +657,7 @@ export class Game {
 
             // --- 2. DETECTAR TIPO E ÍCONE ---
             let type = 'normal';
-            let emojiIcon = null; 
+            let emojiIcon = null; // Se continuar null, mostra o número
 
             if (isBonus) {
                 type = 'bonus';
@@ -647,20 +677,17 @@ export class Game {
                 emojiIcon = '⚔️'; 
             }
 
-            // --- 3. DEFINIR CORES VIVAS (SÓLIDAS) ---
+            // --- 3. DEFINIR CORES ---
             const palettes = {
-                // Azul mais elétrico e profundo
-                'normal':     { top: '#2563eb', bot: '#172554', stroke: '#60a5fa' }, 
-                // Vermelho sangue vivo
-                'elite':      { top: '#dc2626', bot: '#7f1d1d', stroke: '#fca5a5' }, 
-                // Ouro rico e laranja
-                'final-boss': { top: '#f59e0b', bot: '#92400e', stroke: '#fcd34d' }, 
-                // Roxo neon
-                'bonus':      { top: '#c026d3', bot: '#701a75', stroke: '#e879f9' }, 
-                // Cinza chumbo escuro (para contraste com a rachadura)
-                'completed':  { top: '#475569', bot: '#0f172a', stroke: '#1e293b' }  
+                'normal':     { top: '#2563eb', bot: '#172554', stroke: '#60a5fa' }, // Azul
+                'elite':      { top: '#dc2626', bot: '#7f1d1d', stroke: '#fca5a5' }, // Vermelho
+                'final-boss': { top: '#f59e0b', bot: '#92400e', stroke: '#fcd34d' }, // Dourado
+                'bonus':      { top: '#c026d3', bot: '#701a75', stroke: '#e879f9' }, // Roxo
+                'completed':  { top: '#475569', bot: '#0f172a', stroke: '#1e293b' }  // Cinza
             };
 
+            // Se for bônus, usa a paleta 'bonus' diretamente, pois state agora é 'unlocked'
+            // Se state for 'completed' (fases normais), usa a paleta 'completed'
             const p = (state === 'completed') ? palettes['completed'] : palettes[type];
 
             // Borda Dourada para a fase atual
@@ -677,12 +704,17 @@ export class Game {
             const svgBtn = document.createElementNS(svgNS, "svg");
             const uniqueId = `btn-${isBonus ? 'bonus' : levelData.id}`;
             
+            // Adiciona a classe 'type' para controle de tamanho no CSS
             let cssClasses = `map-node-svg style-shield floating-node ${state} ${type}`;
-			if (state === 'current') cssClasses += ' current';
+            
+            // Fase atual tem animação extra
+            if (state === 'current') cssClasses += ' current';
+            
             svgBtn.setAttribute("class", cssClasses);
             svgBtn.setAttribute("viewBox", "0 0 100 100");
             svgBtn.style.left = `${pos.x}%`;
             svgBtn.style.top = `${pos.y}%`;
+            
             svgBtn.style.setProperty('--i', Math.random() * 5);
 
             // --- 5. GRADIENTES ---
@@ -692,12 +724,10 @@ export class Game {
                     <stop offset="0%" stop-color="${p.top}" stop-opacity="1" />
                     <stop offset="100%" stop-color="${p.bot}" stop-opacity="1" />
                 </linearGradient>
-                
                 <linearGradient id="gradShine-${uniqueId}" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stop-color="white" stop-opacity="0.3" />
                     <stop offset="60%" stop-color="white" stop-opacity="0" />
                 </linearGradient>
-                
                 <radialGradient id="gradShadow-${uniqueId}" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
                     <stop offset="0%" stop-color="black" stop-opacity="0.6" />
                     <stop offset="100%" stop-color="black" stop-opacity="0" />
@@ -721,27 +751,24 @@ export class Game {
             pathBase.setAttribute("stroke-width", finalStrokeWidth);
             svgBtn.appendChild(pathBase);
 
-            // --- 8. RACHADURA 3D (HIGHLIGHTED) ---
+            // --- 8. RACHADURA 3D ---
             if (state === 'completed') {
                 const crackD = "M 35 30 L 50 50 L 40 65 M 60 40 L 50 50 L 55 70";
                 
-                // Camada 1: Sombra da rachadura (Preto Grosso)
                 const crackShadow = document.createElementNS(svgNS, "path");
                 crackShadow.setAttribute("d", crackD);
                 crackShadow.setAttribute("fill", "none");
                 crackShadow.setAttribute("stroke", "black");
-                crackShadow.setAttribute("stroke-width", "4"); // Bem grosso
+                crackShadow.setAttribute("stroke-width", "4");
                 crackShadow.setAttribute("opacity", "0.8");
                 svgBtn.appendChild(crackShadow);
 
-                // Camada 2: Luz da rachadura (Branco Fino e Deslocado)
-                // Isso cria o efeito de "borda quebrada" brilhando
                 const crackHighlight = document.createElementNS(svgNS, "path");
                 crackHighlight.setAttribute("d", crackD);
                 crackHighlight.setAttribute("fill", "none");
                 crackHighlight.setAttribute("stroke", "rgba(255,255,255,0.3)");
                 crackHighlight.setAttribute("stroke-width", "1");
-                crackHighlight.setAttribute("transform", "translate(1, 1)"); // Leve deslocamento
+                crackHighlight.setAttribute("transform", "translate(1, 1)");
                 svgBtn.appendChild(crackHighlight);
             }
 
@@ -761,16 +788,16 @@ export class Game {
             text.setAttribute("class", "glossy-text");
             text.style.pointerEvents = "none";
             
-            // Texto mais brilhante para ler em cima do escudo escuro
             text.style.fill = (state === 'completed') ? '#94a3b8' : '#ffffff';
             text.style.fontSize = emojiIcon ? "34px" : "28px";
-            text.style.textShadow = "0 2px 4px rgba(0,0,0,0.8)"; // Sombra mais forte no texto
+            text.style.textShadow = "0 2px 4px rgba(0,0,0,0.8)";
             
             text.textContent = emojiIcon || levelNum;
             svgBtn.appendChild(text);
 
             // --- EVENTO ---
             svgBtn.addEventListener('click', () => {
+                // Removemos o bloqueio do bônus, mas mantemos para fases futuras
                 if (state === 'locked') {
                     if(this.audio) this.audio.vibrate(50);
                     return; 

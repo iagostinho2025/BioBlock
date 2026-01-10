@@ -1,8 +1,7 @@
-// Configuração dos Níveis e Mundos
+// js/modules/data/levels.js
 
 // --- OBSTÁCULOS COMUNS ---
 const LAVA = { type: 'LAVA', key: 'volcano', emoji: '🌋' };
-const WATER_OBS = { type: 'OBSTACLE', key: 'algae', emoji: '🌿' }; 
 
 // Helpers para posições do Grid (Gameplay)
 const CORNERS = [{r:0,c:0}, {r:0,c:7}, {r:7,c:0}, {r:7,c:7}];
@@ -10,19 +9,50 @@ const CORNERS_OPPOSITE = [{r:0,c:0}, {r:7,c:7}];
 
 export const WORLDS = [
     // =========================================================================
-    // MUNDO 1: TERRA DO FOGO
+    // MUNDO 0: O PORTÃO (TUTORIAL)
+    // =========================================================================
+    {
+        id: 'tutorial_world',
+        name: 'O Portão',
+        emoji: '⛩️',
+        gradient: 'linear-gradient(135deg, #475569, #0f172a)', // Cinza Azulado
+        totalLevels: 1,
+        bossName: 'Guardião',
+        bossAvatar: '🗿',
+        bgImage: '', // Opcional
+        
+        // POSIÇÃO DA ILHA NO MAPA DE MUNDOS (0-100%)
+        worldPos: { x: 50, y: 85 }, // Lá embaixo, na entrada
+        
+        levels: [
+            { 
+                id: 0, 
+                type: 'boss', 
+                boss: { id: 'guardian', name: 'Guardião', emoji: '🗿', maxHp: 15 },
+                items: ['fire', 'heart'], 
+                gridConfig: [], 
+                mapPos: { x: 50, y: 50 } 
+            }
+        ]
+    },
+
+    // =========================================================================
+    // MUNDO 1: TERRA DO FOGO (Fases 1-20)
     // =========================================================================
     {
         id: 'fire_world',
         name: 'Terra do Fogo',
         emoji: '🌋',
-        gradient: 'linear-gradient(135deg, #b91c1c, #d97706)',
+        gradient: 'linear-gradient(135deg, #b91c1c, #d97706)', // Vermelho/Laranja
         totalLevels: 20,
         bossName: 'Ignis',
         bossAvatar: '🐉',
         themeClass: 'theme-fire',
-        bgImage: 'assets/img/map_volcano.jpg', // Certifique-se que o nome do arquivo da imagem está correto aqui
+        bgImage: 'assets/img/map_volcano.jpg', // Imagem otimizada
         
+        // POSIÇÃO DA ILHA NO MAPA DE MUNDOS
+        worldPos: { x: 30, y: 65 }, // Esquerda baixo
+
         levels: [
             // FASE 1
             { id: 1, type: 'normal', goals: { fire: 5 }, items: ['fire'], gridConfig: [], mapPos: { x: 36, y: 91 } },
@@ -87,48 +117,124 @@ export const WORLDS = [
         ]
     },
 
-    // MUNDO 2: ÁGUA (Placeholder)
+    // =========================================================================
+    // MUNDO 2: FLORESTA NEGRA (Fases 21-40)
+    // =========================================================================
     {
-        id: 'water_world',
-        name: 'Ilha das Águas',
-        emoji: '🌊',
-        gradient: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
+        id: 'forest_world',
+        name: 'Floresta Negra',
+        emoji: '🌲',
+        gradient: 'linear-gradient(135deg, #14532d, #581c87)', // Verde Escuro / Roxo
         totalLevels: 20,
-        bossName: 'Kraken',
-        bossAvatar: '🐙',
-        themeClass: 'theme-water',
-        bgImage: 'assets/img/bg_water.png', 
+        bossName: 'Aracna',
+        bossAvatar: '🕷️',
+        bgImage: 'assets/img/bg_forest.jpg', // Criar depois
+        
+        // POSIÇÃO DA ILHA NO MAPA DE MUNDOS
+        worldPos: { x: 70, y: 50 }, // Direita meio
+
         levels: Array.from({length: 20}, (_, i) => ({
-             id: 21 + i, type: 'normal', goals: { drop: 15 }, items: ['drop'], gridConfig: [], mapPos: { x: 50, y: 50 }
+             id: 21 + i, 
+             type: (21+i) === 40 ? 'boss' : 'normal',
+             boss: (21+i) === 40 ? { id: 'aracna', name: 'Aracna', emoji: '🕷️', maxHp: 60 } : null,
+             goals: { leaf: 15 }, 
+             items: ['leaf', 'poison'], 
+             gridConfig: [], 
+             mapPos: { x: 50, y: 50 } // Ajustar posições depois
         }))
     },
 
-    // MUNDO 3: FLORESTA (Placeholder)
+    // =========================================================================
+    // MUNDO 3: MONTANHA DE FERRO (Fases 41-60)
+    // =========================================================================
     {
-        id: 'forest_world',
-        name: 'Floresta Antiga',
-        emoji: '🌲',
-        gradient: 'linear-gradient(135deg, #22c55e, #14532d)',
+        id: 'mountain_world',
+        name: 'Montanha de Ferro',
+        emoji: '🏔️',
+        gradient: 'linear-gradient(135deg, #57534e, #ca8a04)', // Cinza Pedra / Dourado
         totalLevels: 20,
-        bossName: 'Treant',
-        bossAvatar: '🌳',
-        themeClass: 'theme-forest',
-        bgImage: 'assets/img/bg_forest.png', 
+        bossName: 'Golem Rei',
+        bossAvatar: '🤖',
+        bgImage: 'assets/img/bg_mountain.jpg', // Criar depois
+        
+        // POSIÇÃO DA ILHA NO MAPA DE MUNDOS
+        worldPos: { x: 25, y: 35 }, // Esquerda alto
+
         levels: Array.from({length: 20}, (_, i) => ({
-             id: 41 + i, type: 'normal', goals: { leaf: 10 }, items: ['leaf'], gridConfig: [], mapPos: { x: 50, y: 50 }
+             id: 41 + i, 
+             type: (41+i) === 60 ? 'boss' : 'normal',
+             boss: (41+i) === 60 ? { id: 'golem', name: 'Golem Rei', emoji: '🤖', maxHp: 80 } : null,
+             goals: { gold: 20 }, 
+             items: ['gold', 'pickaxe'], 
+             gridConfig: [], 
+             mapPos: { x: 50, y: 50 }
+        }))
+    },
+
+    // =========================================================================
+    // MUNDO 4: DESERTO DA MORTE (Fases 61-80)
+    // =========================================================================
+    {
+        id: 'desert_world',
+        name: 'Deserto da Morte',
+        emoji: '🏜️',
+        gradient: 'linear-gradient(135deg, #78350f, #9a3412)', // Marrom / Ferrugem
+        totalLevels: 20,
+        bossName: 'Warlord Grok',
+        bossAvatar: '👹',
+        bgImage: 'assets/img/bg_desert.jpg', // Criar depois
+        
+        // POSIÇÃO DA ILHA NO MAPA DE MUNDOS
+        worldPos: { x: 75, y: 25 }, // Direita alto
+
+        levels: Array.from({length: 20}, (_, i) => ({
+             id: 61 + i, 
+             type: (61+i) === 80 ? 'boss' : 'normal',
+             boss: (61+i) === 80 ? { id: 'grok', name: 'Grok', emoji: '👹', maxHp: 100 } : null,
+             goals: { bone: 15 }, 
+             items: ['bone', 'sand'], 
+             gridConfig: [], 
+             mapPos: { x: 50, y: 50 }
+        }))
+    },
+
+    // =========================================================================
+    // MUNDO 5: CASTELO SOMBRIO (Fases 81-100)
+    // =========================================================================
+    {
+        id: 'castle_world',
+        name: 'Castelo Sombrio',
+        emoji: '🏰',
+        gradient: 'linear-gradient(135deg, #020617, #7f1d1d)', // Preto / Vermelho Sangue
+        totalLevels: 20,
+        bossName: 'Mago Negro',
+        bossAvatar: '🧙‍♂️',
+        bgImage: 'assets/img/bg_castle.jpg', // Criar depois
+        
+        // POSIÇÃO DA ILHA NO MAPA DE MUNDOS
+        worldPos: { x: 50, y: 10 }, // Topo centro
+
+        levels: Array.from({length: 20}, (_, i) => ({
+             id: 81 + i, 
+             type: (81+i) === 100 ? 'boss' : 'normal',
+             boss: (81+i) === 100 ? { id: 'dark_wizard', name: 'Mago Negro', emoji: '🧙‍♂️', maxHp: 150 } : null,
+             goals: { magic: 20 }, 
+             items: ['magic', 'skull'], 
+             gridConfig: [], 
+             mapPos: { x: 50, y: 50 }
         }))
     }
 ];
 
-// --- CONFIGURAÇÃO DA FASE BÔNUS (SALA DO TESOURO) ---
+// --- CONFIGURAÇÃO DA FASE BÔNUS ---
 export const BONUS_LEVEL_CONFIG = {
     id: 'bonus_daily', 
     type: 'bonus', 
     name: 'Sala do Tesouro',
     world: 'bonus',
-    bgImage: 'assets/img/bg_fire.png', 
+    bgImage: 'assets/img/map_volcano.jpg', 
     
-    // Posição do Bônus conforme sua tabela
+    // Posição do Botão Roxo dentro do Mapa de Fogo
     mapPos: { x: 14, y: 47 },
 
     goals: { 
