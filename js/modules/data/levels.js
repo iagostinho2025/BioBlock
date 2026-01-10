@@ -22,7 +22,7 @@ export const WORLDS = [
         bgImage: '', // Opcional
         
         // POSIÇÃO DA ILHA NO MAPA DE MUNDOS (0-100%)
-        worldPos: { x: 29, y: 90 }, // Lá embaixo, na entrada
+        worldPos: { x: 29, y: 87 }, // Lá embaixo, na entrada
         worldSize: 140,
 		
         levels: [
@@ -52,8 +52,8 @@ export const WORLDS = [
         bgImage: 'assets/img/map_volcano.jpg', // Imagem otimizada
         
         // POSIÇÃO DA ILHA NO MAPA DE MUNDOS
-        worldPos: { x: 73, y: 76 }, // Esquerda baixo
-		worldSize: 190,
+        worldPos: { x: 72, y: 75 }, // Esquerda baixo
+		worldSize: 184,
 
 
         levels: [
@@ -219,7 +219,7 @@ export const WORLDS = [
         
         // POSIÇÃO DA ILHA NO MAPA DE MUNDOS
         worldPos: { x: 77, y: 15 }, // Topo centro
-		worldSize: 150,
+		worldSize: 138,
 
         levels: Array.from({length: 20}, (_, i) => ({
              id: 81 + i, 

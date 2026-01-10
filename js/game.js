@@ -68,6 +68,7 @@ export class Game {
         this.maxUnlockedLevel = 99; 
 
         this.setupMenuEvents();
+		this.startLoadingSequence();
     }
 
     loadProgress() {
@@ -110,6 +111,62 @@ export class Game {
         localStorage.setItem('powerup_rotate', this.powerUps.rotate);
         localStorage.setItem('powerup_swap', this.powerUps.swap);
         this.updateControlsVisuals();
+    }
+	
+	startLoadingSequence() {
+        const bar = document.getElementById('loading-bar-fill');
+        const text = document.getElementById('loading-text');
+        const screen = document.getElementById('loading-screen');
+        
+        if (!bar || !screen) return;
+
+        // Fases do carregamento (Simulação AAA)
+        // Isso dá tempo para o navegador renderizar as imagens pesadas de fundo
+        const steps = [
+            { pct: 10, msg: "Conectando..." },
+            { pct: 30, msg: "Carregando mundos..." },
+            { pct: 55, msg: "Afistando lâminas..." },
+            { pct: 75, msg: "Invocando chefões..." },
+            { pct: 90, msg: "Finalizando..." },
+            { pct: 100, msg: "Pronto!" }
+        ];
+
+        let currentStep = 0;
+
+        // Função que avança a barra
+        const nextStep = () => {
+            if (currentStep >= steps.length) {
+                // FIM DO CARREGAMENTO
+                setTimeout(() => {
+                    // 1. Fade Out visual
+                    screen.classList.add('fade-out');
+                    
+                    // 2. Remove do DOM após a animação (0.8s) para liberar memória
+                    setTimeout(() => {
+                        screen.style.display = 'none';
+                        // Se você tiver música de intro, pode tocar aqui
+                        // if(this.audio) this.audio.playIntro(); 
+                    }, 800);
+                    
+                }, 500); // Pequena pausa no 100% para o usuário ver que completou
+                return;
+            }
+
+            // Atualiza UI
+            const stepData = steps[currentStep];
+            bar.style.width = stepData.pct + '%';
+            if (text) text.innerText = stepData.msg;
+
+            currentStep++;
+
+            // Tempo aleatório entre passos para parecer carregamento real (humanizado)
+            // Entre 300ms e 600ms
+            const delay = Math.random() * 300 + 300; 
+            setTimeout(nextStep, delay);
+        };
+
+        // Começa a sequência após um breve delay (para o navegador pintar a tela preta inicial)
+        setTimeout(nextStep, 100);
     }
 
     setupMenuEvents() {

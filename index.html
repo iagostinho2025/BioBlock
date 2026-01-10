@@ -14,9 +14,22 @@
 </head>
 <body>
 
+    <div id="loading-screen" class="loading-overlay">
+        <div class="loading-content">
+            <div class="loading-text" id="loading-text">Iniciando a jornada...</div>
+            
+            <div class="loading-bar-track">
+                <div class="loading-bar-fill" id="loading-bar-fill">
+                    <div class="loading-bar-glow"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="app">
         
         <div id="menu-overlay" class="overlay hidden"></div>
+        
         <aside id="app-sidebar" class="sidebar">
             <div class="sidebar-header">
                 <div class="profile-card">
@@ -118,57 +131,55 @@
             <div class="levels-grid" id="levels-container"></div>
         </div>
 
-        <!-- NOVA TELA DE HISTÓRIA ADICIONADA AQUI -->
         <div id="screen-story" class="screen hidden">
-        <div class="story-content">
-            
-            <div class="story-visual">
-                <div class="story-image-placeholder">
-                    </div>
+            <div class="story-content">
+                
+                <div class="story-visual">
+                    <div class="story-image-placeholder">
+                        </div>
+                </div>
+
+                <div class="story-text-container">
+                    <h2 class="story-title">O Chamado</h2>
+                    
+                    <p class="story-line">Você… pode nos ouvir?</p>
+                    <p class="story-line">Meu nome é <span class="highlight-name">Thalion</span>.</p>
+                    
+                    <p class="story-paragraph">
+                        Sou um jovem elfo da floresta. Esta noite, tudo o que eu conhecia foi levado de mim.
+                        Eu estava com <span class="highlight-nyx">Nyx</span>, meu companheiro lobo, treinando entre as árvores quando o vento mudou.
+                    </p>
+
+                    <p class="story-paragraph">
+                        Nyx sentiu o perigo antes de qualquer som… e correu.
+                        Quando chegamos perto da vila, nos escondemos.
+                        Foi então que vimos o <span class="highlight-dark">Mago Negro</span>.
+                    </p>
+
+                    <p class="story-paragraph">
+                        Uma fumaça escura cobriu tudo. Minha família. Meus amigos.
+                        Todos desapareceram.
+                        Quando a fumaça sumiu… não havia ninguém.
+                    </p>
+
+                    <p class="story-paragraph">
+                        O mago partiu em direção ao seu castelo, além dos mundos que separam este lugar do fim.
+                        Eu sou jovem demais para enfrentá-lo sozinho.
+                    </p>
+                    
+                    <p class="story-highlight">
+                        Mas você… você carrega uma espada.<br>
+                        Se caminhar ao nosso lado, podemos alcançar o Castelo Sombrio.
+                    </p>
+
+                    <p class="story-footer">Nossa jornada começa agora.<br>👉 Você nos ajudará?</p>
+                </div>
+
+                <button id="btn-start-adventure" class="btn-epic">
+                    🗡️ Começar Aventura
+                </button>
             </div>
-
-            <div class="story-text-container">
-                <h2 class="story-title">O Chamado</h2>
-                
-                <p class="story-line">Você… pode nos ouvir?</p>
-                <p class="story-line">Meu nome é <span class="highlight-name">Thalion</span>.</p>
-                
-                <p class="story-paragraph">
-                    Sou um jovem elfo da floresta. Esta noite, tudo o que eu conhecia foi levado de mim.
-                    Eu estava com <span class="highlight-nyx">Nyx</span>, meu companheiro lobo, treinando entre as árvores quando o vento mudou.
-                </p>
-
-                <p class="story-paragraph">
-                    Nyx sentiu o perigo antes de qualquer som… e correu.
-                    Quando chegamos perto da vila, nos escondemos.
-                    Foi então que vimos o <span class="highlight-dark">Mago Negro</span>.
-                </p>
-
-                <p class="story-paragraph">
-                    Uma fumaça escura cobriu tudo. Minha família. Meus amigos.
-                    Todos desapareceram.
-                    Quando a fumaça sumiu… não havia ninguém.
-                </p>
-
-                <p class="story-paragraph">
-                    O mago partiu em direção ao seu castelo, além dos mundos que separam este lugar do fim.
-                    Eu sou jovem demais para enfrentá-lo sozinho.
-                </p>
-                
-                <p class="story-highlight">
-                    Mas você… você carrega uma espada.<br>
-                    Se caminhar ao nosso lado, podemos alcançar o Castelo Sombrio.
-                </p>
-
-                <p class="story-footer">Nossa jornada começa agora.<br>👉 Você nos ajudará?</p>
-            </div>
-
-            <button id="btn-start-adventure" class="btn-epic">
-                🗡️ Começar Aventura
-            </button>
         </div>
-    </div>
-        <!-- FIM DA NOVA TELA DE HISTÓRIA -->
 
         <div id="screen-game" class="screen hidden">
             

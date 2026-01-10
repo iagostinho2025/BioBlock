@@ -4839,7 +4839,7 @@ body {
     margin: 0 auto; /* Centraliza no meio do monitor */
     
     /* Imagem de Fundo */
-    background-image: url('../img/bg_world_select.jpg'); /* .jpg aqui */
+    background-image: url('../img/bg_world_select.webp'); /* .jpg aqui */
     background-size: cover; /* Cobre apenas os 600px, não o monitor todo */
     background-position: center top;
     background-repeat: no-repeat;
@@ -4942,4 +4942,114 @@ body {
     text-shadow: 0 2px 4px black;
     pointer-events: none;
     z-index: 5;
+}
+
+/* =========================================
+   TELA DE CARREGAMENTO AAA (CORRIGIDO PC/MOBILE)
+   ========================================= */
+
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    
+    /* CENTRALIZAÇÃO NO PC (O Truque do Celular) */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 600px; /* Trava a largura máxima */
+    height: 100%;
+    
+    z-index: 9999;
+    
+    /* Imagem de Fundo */
+    background-image: url('../img/loading_screen.webp'); /* Verifique se é .webp ou .jpg */
+    background-size: cover; /* Agora cobre só os 600px, ficando perfeito */
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-color: #0d0d0d;
+    
+    /* Layout do conteúdo (Barra embaixo) */
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    
+    /* Espaçamento do rodapé */
+    padding-bottom: 80px; 
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+    
+    opacity: 1;
+    transition: opacity 0.8s ease-out;
+    
+    /* Sombra nas bordas para destacar no PC */
+    box-shadow: 0 0 100px rgba(0,0,0,0.9);
+}
+
+/* Esconde a tela quando terminarmos */
+.loading-overlay.fade-out {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.loading-content {
+    width: 80%;
+    max-width: 320px;
+    text-align: center;
+    animation: fade-in-up 1s ease-out;
+    /* Garante que o texto fique acima de qualquer efeito */
+    position: relative; 
+    z-index: 2;
+}
+
+/* Frase (Texto) */
+.loading-text {
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.85rem; /* Levemente menor para elegância */
+    color: rgba(255, 255, 255, 0.9);
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin-bottom: 20px;
+    font-weight: 600;
+    text-shadow: 0 2px 10px rgba(0,0,0,1); /* Sombra forte para leitura */
+}
+
+/* Trilho da Barra */
+.loading-bar-track {
+    width: 100%;
+    height: 6px;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 10px;
+    overflow: hidden;
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+}
+
+/* Preenchimento da Barra */
+.loading-bar-fill {
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(90deg, #b45309, #fbbf24); /* Ouro */
+    border-radius: 10px;
+    position: relative;
+    transition: width 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+    box-shadow: 0 0 15px rgba(251, 191, 36, 0.6);
+}
+
+/* Brilho na ponta da barra */
+.loading-bar-glow {
+    position: absolute;
+    right: 0;
+    top: 0;
+    height: 100%;
+    width: 30px;
+    background: linear-gradient(90deg, transparent, #ffffff);
+    filter: blur(3px);
+    opacity: 0.8;
+}
+
+/* Animação de Entrada */
+@keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
 }
