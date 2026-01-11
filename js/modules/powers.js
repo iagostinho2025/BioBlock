@@ -7,7 +7,7 @@ export class PowersSystem {
     // Gerenciador central
     handleBoardInteraction(mode, r, c) {
         switch (mode) {
-            case 'magnet': // SUBSTITUIU A BOMB
+            case 'magnet':
                 return this.handleMagnetInteraction(r, c);
             case 'hero_thalion':
                 return this.useThalion(r, c);
@@ -15,14 +15,14 @@ export class PowersSystem {
                 return this.useNyx(r, c);
             case 'hero_player':
                 return this.usePlayer(r, c);
+			case 'hero_mage': 
+			    return this.useMage(r, c);
             default:
                 return false;
         }
     }
 
-    // --- NOVO: ÍMÃ (REPOSICIONAR) ---
-    // Etapa 1: Clica no bloco que quer mover.
-    // Etapa 2: Clica na casa vazia para onde ele vai.
+    // --- 1. ÍMÃ (REPOSICIONAR) ---
     handleMagnetInteraction(r, c) {
         const cellContent = this.game.grid[r][c];
         const cellEl = this.game.boardEl.children[r * 8 + c];
@@ -30,26 +30,23 @@ export class PowersSystem {
         // CASO 1: Nenhum bloco selecionado ainda (Etapa de Seleção)
         if (!this.magnetSource) {
             if (cellContent) {
-                // Seleciona o bloco
                 this.magnetSource = { r, c };
                 
-                // Feedback Visual
                 this.clearMagnetVisuals();
                 if (cellEl) cellEl.classList.add('magnet-selected');
                 
                 if(this.game.audio) this.game.audio.playClick();
                 this.game.effects.showFloatingTextCentered("ESCOLHA O DESTINO", "feedback-gold");
             } else {
-                // Clicou no vazio sem ter selecionado nada
                 this.game.effects.showFloatingTextCentered("SELECIONE UM BLOCO", "text-good");
                 this.playError();
             }
-            return false; // Ainda não gastou o item
+            return false; 
         }
 
         // CASO 2: Bloco já selecionado (Etapa de Movimento)
         else {
-            // Se clicou no MESMO bloco, cancela seleção
+            // Se clicou no MESMO bloco, cancela
             if (this.magnetSource.r === r && this.magnetSource.c === c) {
                 this.magnetSource = null;
                 this.clearMagnetVisuals();
@@ -76,14 +73,14 @@ export class PowersSystem {
                 this.game.grid[srcR][srcC] = null;
 
                 // 2. Efeitos
-                this.triggerVisual(srcR, srcC, 'type-normal'); // Efeito na saída
+                this.triggerVisual(srcR, srcC, 'type-normal'); 
                 if(this.game.audio) {
-                    this.game.audio.playDrag(); // Som de movimento
+                    this.game.audio.playDrag(); 
                     this.game.audio.playDrop();
                 }
 
                 // 3. Consome e Finaliza
-                this.game.powerUps.magnet--; // Consome Ímã
+                this.game.powerUps.magnet--; 
                 this.game.savePowerUps();
                 
                 this.magnetSource = null;
@@ -100,20 +97,16 @@ export class PowersSystem {
         selected.forEach(el => el.classList.remove('magnet-selected'));
     }
 
-    // --- 2. THALION (Horizontal - 3 Blocos) ---
+    // --- 2. THALION (Flecha Precisa: 1 Bloco) ---
     useThalion(r, c) {
         let hit = false;
-        const size = this.game.gridSize;
-
-        for (let targetC = c - 1; targetC <= c + 1; targetC++) {
-            if (targetC >= 0 && targetC < size) {
-                if (this.game.grid[r][targetC]) {
-                    this.triggerVisual(r, targetC, 'type-forest'); 
-                    this.game.collectItem(r, targetC, this.game.grid[r][targetC]);
-                    this.game.grid[r][targetC] = null;
-                    hit = true;
-                }
-            }
+        
+        // Verifica apenas o bloco clicado (Tiro único)
+        if (this.game.grid[r][c]) {
+            this.triggerVisual(r, c, 'type-forest'); 
+            this.game.collectItem(r, c, this.game.grid[r][c]);
+            this.game.grid[r][c] = null;
+            hit = true;
         }
 
         if (hit) {
@@ -127,17 +120,22 @@ export class PowersSystem {
         }
     }
 
-    // --- 3. NYX (Vertical - Coluna Inteira) ---
+    // --- 3. NYX (Salto Vertical: 3 Blocos para Cima) ---
     useNyx(r, c) {
         let hit = false;
-        const size = this.game.gridSize;
-
-        for (let targetR = 0; targetR < size; targetR++) {
-            if (this.game.grid[targetR][c]) {
-                this.triggerVisual(targetR, c, 'type-ice');
-                this.game.collectItem(targetR, c, this.game.grid[targetR][c]);
-                this.game.grid[targetR][c] = null;
-                hit = true;
+        
+        // Alvo: O bloco clicado e os 2 acima dele (Total 3)
+        for (let i = 0; i < 3; i++) {
+            const targetR = r - i;
+            
+            // Verifica se está dentro do tabuleiro (não pode ser negativo)
+            if (targetR >= 0) {
+                if (this.game.grid[targetR][c]) {
+                    this.triggerVisual(targetR, c, 'type-ice');
+                    this.game.collectItem(targetR, c, this.game.grid[targetR][c]);
+                    this.game.grid[targetR][c] = null;
+                    hit = true;
+                }
             }
         }
 
@@ -152,25 +150,25 @@ export class PowersSystem {
         }
     }
 
-    // --- 4. JOGADOR (Corte em X Sequencial) ---
-    usePlayer(centerR, centerC) {
+    // --- 4. JOGADOR (Corte Duplo Vertical: 2x3) ---
+    usePlayer(startR, startC) {
         let hitAny = false;
         const size = this.game.gridSize;
 
-        const slash1 = [
-            { r: centerR - 1, c: centerC - 1 },
-            { r: centerR,     c: centerC },
-            { r: centerR + 1, c: centerC + 1 }
-        ];
+        // Define as duas colunas de ataque (Bloco clicado + Direita)
+        // 3 blocos para baixo em cada coluna
+        const slash1 = []; // Coluna atual
+        const slash2 = []; // Coluna da direita
 
-        const slash2 = [
-            { r: centerR - 1, c: centerC + 1 },
-            { r: centerR + 1, c: centerC - 1 }
-        ];
+        for (let i = 0; i < 3; i++) {
+            slash1.push({ r: startR + i, c: startC });
+            slash2.push({ r: startR + i, c: startC + 1 });
+        }
 
         const processHit = (list) => {
             let localHit = false;
             list.forEach(pos => {
+                // Verifica limites do grid
                 if (pos.r >= 0 && pos.r < size && pos.c >= 0 && pos.c < size) {
                     if (this.game.grid[pos.r][pos.c]) {
                         this.triggerVisual(pos.r, pos.c, 'type-mountain');
@@ -184,7 +182,10 @@ export class PowersSystem {
             return localHit;
         };
 
+        // Executa o primeiro corte (Coluna clicada)
         const hit1 = processHit(slash1);
+        
+        // Verifica se o segundo corte teria alvos (para validar o uso do poder)
         const hasTargetsInSlash2 = slash2.some(pos => 
             pos.r >= 0 && pos.r < size && pos.c >= 0 && pos.c < size && this.game.grid[pos.r][pos.c]
         );
@@ -194,13 +195,53 @@ export class PowersSystem {
             this.consumeHeroPower('player');
             this.game.renderGrid();
             
-            // --- AJUSTE DE TEMPO: 1000ms ---
+            // Executa o segundo corte com um delay curto para dar impacto (Combo)
             setTimeout(() => {
                 processHit(slash2);
                 this.finalizeMove();
                 
-            }, 1000); // <--- AUMENTADO PARA 1 SEGUNDO
+            }, 1000); 
 
+            return true;
+        } else {
+            this.playError();
+            return false;
+        }
+    }
+	
+	// --- 5. MAGA (Luz Divina: Área 2x3) ---
+    useMage(r, c) {
+        let hit = false;
+        const size = this.game.gridSize;
+        const targets = [];
+
+        // Linha do Clique (Centro, Esquerda, Direita)
+        targets.push({r: r, c: c});
+        targets.push({r: r, c: c - 1});
+        targets.push({r: r, c: c + 1});
+
+        // Linha de Baixo (Centro, Esquerda, Direita)
+        targets.push({r: r + 1, c: c});
+        targets.push({r: r + 1, c: c - 1});
+        targets.push({r: r + 1, c: c + 1});
+
+        targets.forEach(pos => {
+            // Verifica se está dentro do tabuleiro
+            if (pos.r >= 0 && pos.r < size && pos.c >= 0 && pos.c < size) {
+                if (this.game.grid[pos.r][pos.c]) {
+                    // Efeito Amarelo (type-bee é amarelo/ouro)
+                    this.triggerVisual(pos.r, pos.c, 'type-bee'); 
+                    this.game.collectItem(pos.r, pos.c, this.game.grid[pos.r][pos.c]);
+                    this.game.grid[pos.r][pos.c] = null;
+                    hit = true;
+                }
+            }
+        });
+
+        if (hit) {
+            if(this.game.audio) this.game.audio.playMage();
+            this.consumeHeroPower('mage');
+            this.finalizeMove();
             return true;
         } else {
             this.playError();

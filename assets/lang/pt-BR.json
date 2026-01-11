@@ -1,0 +1,137 @@
+{
+    "app": {
+        "title": "Block Lands: Adventure",
+        "version": "Block Lands: Adventure v1.0"
+    },
+    "settings": {
+        "title": "Configurações",
+        "audio_title": "ÁUDIO & EFEITOS",
+        "music": "Música",
+        "sfx": "Efeitos Sonoros",
+        "haptics": "Vibração",
+        "lang_title": "IDIOMA",
+        "data_title": "DADOS",
+        "reset_btn": "Apagar Progresso",
+        "reset_confirm": "Tem certeza? Isso apagará todo o seu progresso!",
+        "version": "Versão"
+    },
+    "loading": {
+        "connecting": "Conectando aos servidores...",
+        "polishing": "Polindo espadas...",
+        "mapping": "Desenhando mapas...",
+        "summoning": "Invocando chefões...",
+        "finalizing": "Finalizando...",
+        "start_msg": "Iniciando a jornada..."
+    },
+    "sidebar": {
+        "greeting": "Bem vindo (a)",
+        "level_prefix": "Nível",
+        "achievements": "Conquistas",
+        "store": "Loja de Mestres",
+        "how_to_play": "Como Jogar",
+        "settings": "Configurações",
+        "language": "Idioma",
+        "terms": "Termos e Privacidade"
+    },
+    "menu": {
+        "modes_title": "MODOS DE JOGO",
+        "classic_title": "Modo Clássico",
+        "classic_desc": "Sem tempo, apenas relaxe.",
+        "adventure_title": "Modo Aventura",
+        "adventure_desc": "Derrote chefões e avance.",
+        "blitz_title": "Modo Blitz",
+        "blitz_desc": "Corra contra o tempo!",
+        "tag_new": "Novo",
+        "blitz_coming_soon": "Modo Blitz: Em breve! ⚡"
+    },
+    "story": {
+        "title": "O Chamado",
+        "line1": "Você... pode nos ouvir?",
+        "line2": "Meu nome é <span class='highlight-name'>Thalion</span>.",
+        "p1": "Sou um jovem elfo da floresta. Esta noite, tudo o que eu conhecia foi levado de mim. Eu estava com <span class='highlight-nyx'>Nyx</span>, meu companheiro lobo, treinando entre as árvores quando o vento mudou.",
+        "p2": "Nyx sentiu o perigo antes de qualquer som… e correu. Quando chegamos perto da vila, nos escondemos. Foi então que vimos o <span class='highlight-dark'>Mago Negro</span>.",
+        "p3": "Uma fumaça escura cobriu tudo. Minha família. Meus amigos. Todos desapareceram. Quando a fumaça sumiu… não havia ninguém.",
+        "p4": "O mago partiu em direção ao seu castelo, além dos mundos que separam este lugar do fim. Eu sou jovem demais para enfrentá-lo sozinho.",
+        "highlight": "Mas você… você carrega uma espada.<br>Se caminhar ao nosso lado, podemos alcançar o Castelo Sombrio.",
+        "footer": "Nossa jornada começa agora.<br>👉 Você nos ajudará?",
+        "btn_start": "🗡️ Começar Aventura"
+    },
+	
+	"story": {
+        "title": "O Chamado",
+        "intro_line1": "Você... pode nos ouvir?",
+        "intro_line2": "A escuridão caiu sobre nós.",
+        "intro_p1": "O Mago Negro levou tudo. Minha vila, meu povo... restamos apenas eu e Nyx.",
+        "intro_p2": "Precisamos de um campeão. Alguém capaz de quebrar as correntes do destino.",
+        
+        "choose_title": "QUEM É VOCÊ?",
+        "warrior_name": "Guerreiro de Ferro",
+        "warrior_desc": "Força bruta. Especialista em quebrar defesas e abrir caminhos com sua espada flamejante.",
+        "mage_name": "Maga da Luz",
+        "mage_desc": "Sabedoria antiga. Controla a luz divina para purificar áreas e obliterar as trevas.",
+        
+        "reply_warrior": "Uma espada de fogo... As lendas diziam que um guerreiro viria do oeste. Sua força será nosso escudo.",
+        "reply_mage": "Essa luz... Faz séculos que não vejo tal pureza. Sua magia será nossa lanterna na escuridão.",
+        
+        "final_call": "O caminho para o Castelo Sombrio está bloqueado pelo Guardião de Pedra.",
+        "btn_fight": "⚔️ Enfrentar Guardião"
+    },
+	
+    "worlds": {
+        "map_title": "Mapa dos Mundos",
+        "tutorial": "O Portão",
+        "fire": "Terra do Fogo",
+        "forest": "Floresta Negra",
+        "mountain": "Montanha de Ferro",
+        "desert": "Deserto da Morte",
+        "castle": "Castelo Sombrio",
+        "bonus": "Sala do Tesouro",
+        "locked_msg": "MUNDO BLOQUEADO"
+    },
+    "bosses": {
+        "guardian": "Guardião",
+        "ignis": "Ignis",
+        "magmor": "Magmor",
+        "pyra": "Fênix Infernal",
+        "aracna": "Aracna",
+        "golem": "Golem Rei",
+        "grok": "Warlord Grok",
+        "dark_wizard": "Mago Negro",
+        "defeated": "DERROTADO"
+    },
+    "game": {
+        "hero_thalion_ready": "THALION PRONTO!",
+        "hero_nyx_ready": "NYX PRONTO!",
+        "hero_player_ready": "ESPADA PRONTA!",
+        "aim_single": "MIRAR: ALVO ÚNICO",
+        "aim_thalion": "MIRAR: 1 BLOCO",
+        "aim_nyx": "MIRAR: 3 BLOCOS",
+        "aim_player": "MIRAR: CORTE DUPLO",
+        "magnet_select": "SELECIONE UM BLOCO",
+        "magnet_dest": "ESCOLHA O DESTINO",
+		"hero_mage_ready": "MAGA PRONTA!",
+        "aim_mage": "MIRAR: LUZ DIVINA"
+    },
+    "ui": {
+        "victory": "Vitória!",
+        "game_over": "Foi Quase",
+        "objectives": "Objetivos",
+        "progress": "Progresso",
+        "rewards": "Recompensas",
+        "score": "Pontuação:",
+        "btn_continue": "Continuar",
+        "btn_back": "Voltar",
+        "btn_restart": "Reiniciar",
+        "btn_menu": "Menu",
+        "combo": "COMBO"
+    },
+    "feedback": {
+        "good": "BOA!",
+        "great": "ÓTIMO!",
+        "excellent": "EXCELENTE!",
+        "perfect": "PERFEITO!",
+        "wow": "UAU!",
+        "holycow": "CARAMBA!!",
+        "unreal": "IRREAL!!!"
+    }
+}

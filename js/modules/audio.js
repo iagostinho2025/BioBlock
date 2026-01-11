@@ -22,7 +22,7 @@ export class AudioSystem {
 
     async loadSounds() {
         const files = {
-            // GAMEPLAY COMUM
+            // --- EFEITOS DE INTERFACE E GAMEPLAY ---
             drag: 'assets/sounds/drag.mp3',
             drop: 'assets/sounds/drop.mp3',
             click: 'assets/sounds/click.mp3',
@@ -32,22 +32,54 @@ export class AudioSystem {
             clear3: 'assets/sounds/clear_3.mp3',
             clear4: 'assets/sounds/clear_4.mp3',
             
-            // NOVOS SONS DE COMBO (Vozes)
-            wow: 'assets/sounds/voice_wow.mp3',         // Combo x2
-            holycow: 'assets/sounds/voice_holycow.mp3', // Combo x3
-            unreal: 'assets/sounds/voice_unreal.mp3',   // Combo x4+
+            // --- VOZES DE COMBO ---
+            wow: 'assets/sounds/voice_wow.mp3',
+            holycow: 'assets/sounds/voice_holycow.mp3',
+            unreal: 'assets/sounds/voice_unreal.mp3',
             
-            // BOSS (Música e Ataques)
-            boss_theme: 'assets/sounds/boss_theme.mp3',
-            boss_hit_1: 'assets/sounds/boss_hit_1.mp3', // Soco
-            boss_hit_2: 'assets/sounds/boss_hit_2.mp3', // Espada
-            boss_hit_3: 'assets/sounds/boss_hit_3.mp3', // Magia
-            boss_hit_4: 'assets/sounds/boss_hit_4.mp3', // Explosão
+            // --- EFEITOS DE ATAQUE DOS BOSSES ---
+            boss_hit_1: 'assets/sounds/boss_hit_1.mp3',
+            boss_hit_2: 'assets/sounds/boss_hit_2.mp3',
+            boss_hit_3: 'assets/sounds/boss_hit_3.mp3',
+            boss_hit_4: 'assets/sounds/boss_hit_4.mp3',
 
-            // --- NOVOS PODERES DE HERÓI ---
+            // --- PODERES DOS HERÓIS ---
             arrow: 'assets/sounds/sound_arrow.mp3',
             wolf: 'assets/sounds/sound_wolf.mp3',
-			sword: 'assets/sounds/sound_sword.mp3'
+            sword: 'assets/sounds/sound_sword.mp3',
+			mage: 'assets/sounds/sound_mage.mp3',
+
+            // =================================================================
+            // 🎵 MÚSICAS TEMA (BGM) - AGORA NA PASTA SOUNDS
+            // =================================================================
+            
+            // MUNDO 1: TERRA DO FOGO
+            bgm_fire_10: 'assets/sounds/fire_elite_1.mp3', // Elite (Nível 10)
+            bgm_fire_15: 'assets/sounds/fire_elite_2.mp3', // Elite (Nível 15)
+            bgm_fire_20: 'assets/sounds/fire_boss.mp3',    // Boss Final (Ignis)
+
+            // MUNDO 2: FLORESTA NEGRA
+            bgm_forest_10: 'assets/sounds/forest_elite_1.mp3', 
+            bgm_forest_15: 'assets/sounds/forest_elite_2.mp3', 
+            bgm_forest_20: 'assets/sounds/forest_boss.mp3',    
+
+            // MUNDO 3: MONTANHA
+            bgm_mountain_10: 'assets/sounds/mountain_elite_1.mp3',
+            bgm_mountain_15: 'assets/sounds/mountain_elite_2.mp3',
+            bgm_mountain_20: 'assets/sounds/mountain_boss.mp3',
+
+            // MUNDO 4: DESERTO
+            bgm_desert_10: 'assets/sounds/desert_elite_1.mp3',
+            bgm_desert_15: 'assets/sounds/desert_elite_2.mp3',
+            bgm_desert_20: 'assets/sounds/desert_boss.mp3',
+
+            // MUNDO 5: CASTELO
+            bgm_castle_10: 'assets/sounds/castle_elite_1.mp3',
+            bgm_castle_15: 'assets/sounds/castle_elite_2.mp3',
+            bgm_castle_20: 'assets/sounds/castle_boss.mp3',
+            
+            // Genérico (Fallback)
+            boss_theme: 'assets/sounds/boss_theme.mp3' 
         };
 
         for (const [key, path] of Object.entries(files)) {
@@ -58,9 +90,7 @@ export class AudioSystem {
                 })
                 .then(buffer => this.ctx.decodeAudioData(buffer))
                 .then(audioBuffer => { this.buffers[key] = audioBuffer; })
-                .catch(e => {
-                    // Silencioso para não spammar o console em dev, mas mantém a robustez
-                }); 
+                .catch(e => console.warn(`Áudio não encontrado: ${path}`)); 
         }
     }
 
@@ -171,6 +201,7 @@ export class AudioSystem {
     playArrow() { this.playSound('arrow', () => this.playTone(600, 'sawtooth', 0.1)); }
     playWolf() { this.playSound('wolf', () => this.playTone(150, 'square', 0.3)); }
 	playSword() { this.playSound('sword', () => this.playTone(400, 'square', 0.1)); }
+	playMage() { this.playSound('mage', () => this.playTone(800, 'sine', 0.4)); } // <--- NOVO
 
     // --- GERADORES DE SOM (SINTETIZADOR) ---
     playTone(freq, type, duration) {

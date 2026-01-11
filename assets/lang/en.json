@@ -1,0 +1,130 @@
+{
+    "app": {
+        "title": "Block Lands: Adventure",
+        "version": "Block Lands: Adventure v1.0"
+	},
+    "settings": {
+        "title": "Settings",
+        "audio_title": "AUDIO & EFFECTS",
+        "music": "Music",
+        "sfx": "Sound Effects",
+        "haptics": "Haptic Feedback",
+        "lang_title": "LANGUAGE",
+        "data_title": "DATA",
+        "reset_btn": "Reset Progress",
+        "reset_confirm": "Are you sure? This will wipe all progress!",
+        "version": "Version"	
+    },
+    "loading": {
+        "connecting": "Connecting to servers...",
+        "polishing": "Polishing swords...",
+        "mapping": "Drawing maps...",
+        "summoning": "Summoning bosses...",
+        "finalizing": "Finalizing...",
+        "start_msg": "Starting journey..."
+    },
+    "sidebar": {
+        "greeting": "Welcome",
+        "level_prefix": "Level",
+        "achievements": "Achievements",
+        "store": "Master's Shop",
+        "how_to_play": "How to Play",
+        "settings": "Settings",
+        "language": "Language",
+        "terms": "Terms & Privacy"
+    },
+    "menu": {
+        "modes_title": "GAME MODES",
+        "classic_title": "Classic Mode",
+        "classic_desc": "No time limit, just relax.",
+        "adventure_title": "Adventure Mode",
+        "adventure_desc": "Defeat bosses and advance.",
+        "blitz_title": "Blitz Mode",
+        "blitz_desc": "Race against time!",
+        "tag_new": "New",
+        "blitz_coming_soon": "Blitz Mode: Coming Soon! ⚡"
+    },
+    "story": {
+        "title": "The Call",
+        "intro_line1": "Can you... hear us?",
+        "intro_line2": "Darkness has fallen upon us.",
+        "intro_p1": "The Dark Wizard took everything. My village, my people... only Nyx and I remain.",
+        "intro_p2": "We need a champion. Someone capable of breaking the chains of fate.",
+        "choose_title": "WHO ARE YOU?",
+        "warrior_name": "Iron Warrior",
+        "warrior_desc": "Brute force. Specialist in breaking defenses and clearing paths with a flaming sword.",
+        "mage_name": "Light Mage",
+        "mage_desc": "Ancient wisdom. Controls divine light to purify areas and obliterate darkness.",
+        "reply_warrior": "A sword of fire... Legends said a warrior would come from the west. Your strength will be our shield.",
+        "reply_mage": "This light... It has been centuries since I saw such purity. Your magic will be our lantern in the dark.",
+        "final_call": "The path to the Dark Castle is blocked by the Stone Guardian.",
+        "btn_fight": "⚔️ Fight Guardian",
+        
+        "line1": "Can you... hear us?",
+        "line2": "My name is <span class='highlight-name'>Thalion</span>.",
+        "p1": "I am a young elf from the forest. Tonight, everything I knew was taken from me. I was with <span class='highlight-nyx'>Nyx</span>, my wolf companion, training among the trees when the wind changed.",
+        "p2": "Nyx sensed the danger before any sound… and ran. When we reached the village, we hid. It was then that we saw the <span class='highlight-dark'>Dark Wizard</span>.",
+        "p3": "Dark smoke covered everything. My family. My friends. They all vanished. When the smoke cleared… no one was left.",
+        "p4": "The wizard left towards his castle, beyond the worlds that separate this place from the end. I am too young to face him alone.",
+        "highlight": "But you… you carry a sword.<br>If you walk beside us, we can reach the Dark Castle.",
+        "footer": "Our journey begins now.<br>👉 Will you help us?",
+        "btn_start": "🗡️ Start Adventure"
+    },
+    "worlds": {
+        "map_title": "World Map",
+        "tutorial": "The Gate",
+        "fire": "Land of Fire",
+        "forest": "Black Forest",
+        "mountain": "Iron Mountain",
+        "desert": "Desert of Death",
+        "castle": "Dark Castle",
+        "bonus": "Treasure Room",
+        "locked_msg": "WORLD LOCKED"
+    },
+    "bosses": {
+        "guardian": "Guardian",
+        "ignis": "Ignis",
+        "magmor": "Magmor",
+        "pyra": "Infernal Phoenix",
+        "aracna": "Arachna",
+        "golem": "Golem King",
+        "grok": "Warlord Grok",
+        "dark_wizard": "Dark Wizard",
+        "defeated": "DEFEATED"
+    },
+    "game": {
+        "hero_thalion_ready": "THALION READY!",
+        "hero_nyx_ready": "NYX READY!",
+        "hero_player_ready": "SWORD READY!",
+        "aim_single": "AIM: SINGLE TARGET",
+        "aim_thalion": "AIM: 1 BLOCKS",
+        "aim_nyx": "AIM: 3 BLOCKS",
+        "aim_player": "AIM: DOUBLE SLASH",
+        "magnet_select": "SELECT A BLOCK",
+        "magnet_dest": "CHOOSE DESTINATION",
+		"hero_mage_ready": "MAGE READY!",
+        "aim_mage": "AIM: DIVINE LIGHT"
+    },
+    "ui": {
+        "victory": "Victory!",
+        "game_over": "Game Over",
+        "objectives": "Goals",
+        "progress": "Progress",
+        "rewards": "Rewards",
+        "score": "Score:",
+        "btn_continue": "Continue",
+        "btn_back": "Back",
+        "btn_restart": "Restart",
+        "btn_menu": "Menu",
+        "combo": "COMBO"
+    },
+    "feedback": {
+        "good": "GOOD!",
+        "great": "GREAT!",
+        "excellent": "EXCELLENT!",
+        "perfect": "PERFECT!",
+        "wow": "WOW!",
+        "holycow": "HOLY COW!!",
+        "unreal": "UNREAL!!!"
+    }
+}

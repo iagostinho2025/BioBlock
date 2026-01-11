@@ -4,6 +4,7 @@ import { AudioSystem } from './modules/audio.js';
 import { PowersSystem } from './modules/powers.js';
 import { WORLDS, BONUS_LEVEL_CONFIG } from './modules/data/levels.js';
 import { BOSS_LOGIC } from './modules/logic/bosses.js';
+import { I18nSystem } from './modules/i18n.js'; // ADICIONADO: Importação do sistema de idiomas
 
 const EMOJI_MAP = {
     // Itens Clássicos
@@ -36,6 +37,16 @@ export class Game {
         this.screenLevels = document.getElementById('screen-levels');
         this.screenStory = document.getElementById('screen-story'); // NOVO
         this.screenGame = document.getElementById('screen-game');
+        this.screenSettings = document.getElementById('screen-settings'); // NOVO
+        
+        // Configurações Padrão
+        this.settings = {
+            music: true,
+            sfx: true,
+            haptics: true
+        };
+        this.loadSettings(); // Carrega do localStorage
+        
         this.boardEl = document.getElementById('game-board');
         this.dockEl = document.getElementById('dock');
         this.goalsArea = document.getElementById('goals-area');
@@ -56,6 +67,7 @@ export class Game {
         this.collected = {};
         this.score = 0;
         this.activeSnap = null; 
+        this.i18n = new I18nSystem(); // ADICIONADO: Inicialização do sistema de idiomas
 		this.preloadAssets();
         
         // Power-Ups
@@ -70,6 +82,33 @@ export class Game {
 
         this.setupMenuEvents();
 		this.startLoadingSequence();
+    }
+
+    loadSettings() {
+        const saved = localStorage.getItem('blocklands_settings');
+        if (saved) {
+            this.settings = JSON.parse(saved);
+        }
+        this.applySettings();
+    }
+
+    saveSettings() {
+        localStorage.setItem('blocklands_settings', JSON.stringify(this.settings));
+        this.applySettings();
+    }
+
+    applySettings() {
+        // Aplica Áudio (Se o AudioSystem estiver pronto)
+        if (this.audio) {
+            // Se música off -> volume 0. Se on -> volume 0.3 (padrão do audio.js)
+            if (this.audio.bgmGain) {
+                this.audio.bgmGain.gain.value = this.settings.music ? 0.3 : 0;
+            }
+            if (this.audio.masterGain) {
+                this.audio.masterGain.gain.value = this.settings.sfx ? 0.5 : 0;
+            }
+        }
+        // A vibração é checada na hora de usar (this.audio.vibrate)
     }
 
     loadProgress() {
@@ -87,6 +126,9 @@ export class Game {
 	// Adicione logo após o constructor ou antes do start()
     // --- CARREGAMENTO REAL (FUNCIONAL) ---
     async preloadAssets() {
+        // ADICIONADO: Carrega idiomas antes de tudo
+        await this.i18n.init();
+        
         // Lista de imagens CRÍTICAS para a primeira impressão
         const imagesToLoad = [
             'assets/img/bg_world_select.webp',    // A imagem que estava faltando!
@@ -134,6 +176,8 @@ export class Game {
         localStorage.setItem('powerup_rotate', this.powerUps.rotate);
         localStorage.setItem('powerup_swap', this.powerUps.swap);
         this.updateControlsVisuals();
+		this.screenHeroSelect = document.getElementById('screen-hero-select');
+        this.playerClass = localStorage.getItem('blocklands_class') || 'warrior'; // Padrão
     }
 	
 	// --- SEQUÊNCIA VISUAL INTELIGENTE ---
@@ -145,12 +189,13 @@ export class Game {
         if (!bar || !screen) return;
 
         // Fases visuais para entreter o jogador
+        // ATUALIZADO: Usando this.i18n.t() para traduzir as mensagens
         const messages = [
-            "Conectando aos servidores...",
-            "Polindo espadas...",
-            "Desenhando mapas...",
-            "Invocando chefões...",
-            "Finalizando..."
+            this.i18n.t('loading.connecting'),
+            this.i18n.t('loading.polishing'),
+            this.i18n.t('loading.mapping'),
+            this.i18n.t('loading.summoning'),
+            this.i18n.t('loading.finalizing')
         ];
 
         let visualPct = 0; // Porcentagem visual atual
@@ -231,7 +276,8 @@ export class Game {
         // --- ALTERADO: Agora chama a verificação de história ---
         bindClick('btn-mode-adventure', () => this.checkAdventureIntro()); 
         
-        bindClick('btn-mode-blitz', () => alert('Modo Blitz: Em breve! ⚡'));
+        // ATUALIZADO: Usando this.i18n.t() para a mensagem de "em breve"
+        bindClick('btn-mode-blitz', () => alert(this.i18n.t('menu.blitz_coming_soon')));
         
         // --- NOVO: Botão dentro da tela de história ---
         bindClick('btn-start-adventure', () => {
@@ -324,6 +370,43 @@ export class Game {
             });
         }
 
+        // ADICIONADO: Lógica de Idioma
+        const btnEn = document.getElementById('btn-lang-en');
+        const btnPt = document.getElementById('btn-lang-pt');
+        
+        const updateLangUI = () => {
+            if(btnEn && btnPt) {
+                btnEn.style.background = (this.i18n.currentLang === 'en') ? '#fbbf24' : 'rgba(255,255,255,0.1)';
+                btnEn.style.color = (this.i18n.currentLang === 'en') ? '#000' : '#fff';
+                
+                btnPt.style.background = (this.i18n.currentLang === 'pt-BR') ? '#fbbf24' : 'rgba(255,255,255,0.1)';
+                btnPt.style.color = (this.i18n.currentLang === 'pt-BR') ? '#000' : '#fff';
+            }
+        };
+        updateLangUI(); // Roda ao iniciar
+
+        if(btnEn) btnEn.addEventListener('click', async () => {
+            if(this.audio) this.audio.playClick();
+            await this.i18n.changeLanguage('en');
+            updateLangUI();
+            
+            // SÓ recarrega o mapa se o jogador JÁ ESTIVER na tela de mapa
+            if (this.screenLevels.classList.contains('active-screen')) {
+                this.showWorldSelect();
+            }
+        });
+
+        if(btnPt) btnPt.addEventListener('click', async () => {
+            if(this.audio) this.audio.playClick();
+            await this.i18n.changeLanguage('pt-BR');
+            updateLangUI();
+            
+            // SÓ recarrega o mapa se o jogador JÁ ESTIVER na tela de mapa
+            if (this.screenLevels.classList.contains('active-screen')) {
+                this.showWorldSelect();
+            }
+        });
+
         // Sidebar
         const btnOpen = document.getElementById('btn-open-sidebar');
         const sidebar = document.getElementById('app-sidebar');
@@ -336,19 +419,194 @@ export class Game {
         if(btnOpen) btnOpen.addEventListener('click', () => { if(this.audio) this.audio.playClick(); toggleSidebar(true); });
         if(btnClose) btnClose.addEventListener('click', () => { if(this.audio) this.audio.playBack(); toggleSidebar(false); });
         if(overlay) overlay.addEventListener('click', () => { if(this.audio) this.audio.playBack(); toggleSidebar(false); });
+        
+        // Inicializa a lógica da tela de configurações
+        this.setupSettingsLogic();
+
+        // Botão "Configurações" na Sidebar
+        const btnSettings = document.querySelector('.sidebar-item span[data-i18n="sidebar.settings"]')?.parentNode;
+        
+        if (btnSettings) {
+            btnSettings.addEventListener('click', () => {
+                if(this.audio) this.audio.playClick();
+                // Fecha sidebar e abre settings
+                const sidebar = document.getElementById('app-sidebar');
+                const overlay = document.getElementById('menu-overlay');
+                sidebar.classList.remove('open');
+                overlay.classList.remove('visible');
+                setTimeout(()=>overlay.classList.add('hidden'),300);
+                
+                this.showScreen(this.screenSettings);
+            });
+        }
+    }
+
+    // --- NOVO: Lógica da tela de configurações ---
+    setupSettingsLogic() {
+        // Elementos da UI
+        const toggleMusic = document.getElementById('toggle-music');
+        const toggleSfx = document.getElementById('toggle-sfx');
+        const toggleHaptics = document.getElementById('toggle-haptics');
+        const btnReset = document.getElementById('btn-reset-progress');
+        const btnBack = document.getElementById('btn-settings-back');
+        const btnLangEn = document.getElementById('btn-lang-en');
+        const btnLangPt = document.getElementById('btn-lang-pt');
+
+        // 1. Sincroniza UI com Estado Atual
+        if(toggleMusic) toggleMusic.checked = this.settings.music;
+        if(toggleSfx) toggleSfx.checked = this.settings.sfx;
+        if(toggleHaptics) toggleHaptics.checked = this.settings.haptics;
+
+        // 2. Eventos dos Toggles
+        if(toggleMusic) toggleMusic.addEventListener('change', (e) => {
+            this.settings.music = e.target.checked;
+            this.saveSettings();
+        });
+        if(toggleSfx) toggleSfx.addEventListener('change', (e) => {
+            this.settings.sfx = e.target.checked;
+            this.saveSettings();
+        });
+        if(toggleHaptics) toggleHaptics.addEventListener('change', (e) => {
+            this.settings.haptics = e.target.checked;
+            this.saveSettings();
+            if (this.settings.haptics && this.audio) this.audio.vibrate(50);
+        });
+
+        // 3. Resetar Progresso
+        if(btnReset) btnReset.addEventListener('click', () => {
+            if (confirm(this.i18n.t('settings.reset_confirm'))) {
+                localStorage.clear(); // Limpa tudo
+                location.reload();    // Recarrega o jogo do zero
+            }
+        });
+
+        // 4. Navegação (Voltar)
+        if(btnBack) btnBack.addEventListener('click', () => {
+            if(this.audio) this.audio.playBack();
+            this.showScreen(this.screenMenu);
+        });
+
+        // 5. Botões de Idioma (Lógica migrada)
+        const updateLangVisuals = () => {
+            if (this.i18n.currentLang === 'en') {
+                btnLangEn?.classList.add('active');
+                btnLangPt?.classList.remove('active');
+            } else {
+                btnLangPt?.classList.add('active');
+                btnLangEn?.classList.remove('active');
+            }
+        };
+        updateLangVisuals(); // Roda ao abrir
+
+        if(btnLangEn) btnLangEn.addEventListener('click', async () => {
+            if(this.audio) this.audio.playClick();
+            await this.i18n.changeLanguage('en');
+            updateLangVisuals();
+        });
+
+        if(btnLangPt) btnLangPt.addEventListener('click', async () => {
+            if(this.audio) this.audio.playClick();
+            await this.i18n.changeLanguage('pt-BR');
+            updateLangVisuals();
+        });
     }
 
     // --- NOVO: Verifica se o jogador já viu a intro ---
     checkAdventureIntro() {
-        const hasSeen = localStorage.getItem('blocklands_intro_seen');
+        // Verifica se já completou o tutorial (Fase 0)
+        const progress = this.loadProgress();
         
-        if (hasSeen === 'true') {
-            // Se já viu, vai direto para o mapa
+        if (progress > 0) {
+            // Já passou do tutorial -> Vai pro mapa
             this.showWorldSelect();
         } else {
-            // Se é a primeira vez, mostra a história
-            this.playStory();
+            // Nunca jogou -> Começa a Jornada Cinematográfica
+            this.startCinematicIntro();
         }
+    }
+
+    startCinematicIntro() {
+        // PASSO 1: História Trágica (Texto)
+        this.showScreen(this.screenStory);
+        this.toggleGlobalHeader(false);
+        
+        const container = this.screenStory.querySelector('.story-text-container');
+        container.innerHTML = `
+            <h2 class="story-title fade-in">${this.i18n.t('story.title')}</h2>
+            <p class="story-paragraph fade-in-delay-1">${this.i18n.t('story.intro_p1')}</p>
+            <p class="story-paragraph fade-in-delay-2">${this.i18n.t('story.intro_p2')}</p>
+            <button id="btn-intro-next" class="btn-epic fade-in-delay-3" style="margin-top:30px;">
+                ${this.i18n.t('ui.btn_continue')} ➜
+            </button>
+        `;
+
+        // Imagem de fundo da história
+        const visual = this.screenStory.querySelector('.story-image-placeholder');
+        if(visual) visual.style.backgroundImage = "url('assets/img/bg_story.png')";
+
+        document.getElementById('btn-intro-next').onclick = () => {
+            if(this.audio) this.audio.playClick();
+            this.showHeroSelection();
+        };
+    }
+
+    showHeroSelection() {
+        // PASSO 2: A Escolha
+        this.showScreen(this.screenHeroSelect);
+        
+        // Eventos dos Cards
+        const cardWarrior = document.getElementById('card-warrior');
+        const cardMage = document.getElementById('card-mage');
+        
+        cardWarrior.onclick = () => this.selectHero('player'); // player = guerreiro no código antigo
+        cardMage.onclick = () => this.selectHero('mage');
+    }
+
+    selectHero(heroId) {
+        // Salva a escolha
+        this.playerClass = heroId;
+        localStorage.setItem('blocklands_class', heroId);
+        
+        if(this.audio) {
+            if(heroId === 'player') this.audio.playSword();
+            else this.audio.playMage();
+        }
+
+        // Feedback Visual
+        const card = document.getElementById(heroId === 'player' ? 'card-warrior' : 'card-mage');
+        card.classList.add('selected');
+
+        // Aguarda 1s para efeito dramático e vai para o texto final
+        setTimeout(() => {
+            this.showFinalDialogue(heroId);
+        }, 1000);
+    }
+
+    showFinalDialogue(heroId) {
+        // PASSO 3: A Confirmação
+        this.showScreen(this.screenStory);
+        
+        const replyText = (heroId === 'player') 
+            ? this.i18n.t('story.reply_warrior') 
+            : this.i18n.t('story.reply_mage');
+
+        const container = this.screenStory.querySelector('.story-text-container');
+        container.innerHTML = `
+            <h2 class="story-title" style="color:#fbbf24">${this.i18n.t('story.choose_title')}</h2>
+            <p class="story-highlight">${replyText}</p>
+            <p class="story-paragraph">${this.i18n.t('story.final_call')}</p>
+            
+            <button id="btn-start-tutorial" class="btn-epic wobble-vertical" style="margin-top:30px; background: #dc2626;">
+                ${this.i18n.t('story.btn_fight')}
+            </button>
+        `;
+
+        document.getElementById('btn-start-tutorial').onclick = () => {
+            if(this.audio) this.audio.playClick();
+            // INICIA O TUTORIAL (Fase 0)
+            const tutorialLevel = WORLDS[0].levels[0];
+            this.startAdventureLevel(tutorialLevel);
+        };
     }
 
     // --- NOVO: Exibe a tela de história ---
@@ -451,7 +709,9 @@ export class Game {
             const heroes = [
                 { id: 'thalion', icon: '🧝‍♂️' }, 
                 { id: 'nyx',     icon: '🐺' },
-                { id: 'player',  icon: '⚔️' } 
+                { id: 'player',  icon: '⚔️' },
+				{ id: 'mage',    icon: '🧙‍♀️' },
+				{ id: this.playerClass, icon: (this.playerClass === 'player' ? '⚔️' : '🧙‍♀️') }
             ];
 
             heroes.forEach(h => {
@@ -484,7 +744,7 @@ export class Game {
 
         // Heróis
         if (this.currentMode === 'adventure' && this.heroState) {
-            ['thalion', 'nyx', 'player'].forEach(id => {
+            ['thalion', 'nyx', 'player','mage'].forEach(id => {
                 const btn = document.getElementById(`btn-hero-${id}`);
                 if(!btn) return;
                 btn.className = 'ctrl-btn hero'; 
@@ -499,7 +759,6 @@ export class Game {
         }
     }
 	
-
 
     handleBoardClick(r, c) {
         // Se houver um modo de interação ativo (Bomba, Heróis), delega para o sistema de poderes
@@ -534,7 +793,7 @@ export class Game {
             if(this.audio) this.audio.stopMusic();
         }
         
-        [this.screenMenu, this.screenLevels, this.screenStory, this.screenGame].forEach(s => {
+        [this.screenMenu, this.screenLevels, this.screenStory, this.screenGame, this.screenSettings].forEach(s => {
             if(s) {
                 s.classList.remove('active-screen');
                 s.classList.add('hidden');
@@ -1025,12 +1284,28 @@ export class Game {
         this.currentLevelConfig = levelConfig;
         this.showScreen(this.screenGame);
         
+        // --- ATUALIZAÇÃO: LÓGICA DE MÚSICA INTELIGENTE ---
+        if (this.audio) {
+            // 1. Se a fase tem uma música específica (Elite ou Boss Final)
+            if (levelConfig.musicId) {
+                this.audio.playMusic(levelConfig.musicId);
+            } 
+            // 2. Fallback: Se for Boss antigo sem ID, toca tema genérico
+            else if (levelConfig.type === 'boss') {
+                this.audio.playBossMusic();
+            } 
+            // 3. Fases normais: Silêncio (foco no SFX) ou música ambiente se tiver
+            else {
+                this.audio.stopMusic();
+            }
+        }
+        // --------------------------------------------------
+
         if (levelConfig.type === 'boss') {
             const bossData = levelConfig.boss || { id: 'dragon', name: 'Dragão', emoji: '🐉', maxHp: 50 };
             this.setupBossUI(bossData);
             this.bossState = { active: true, maxHp: bossData.maxHp, currentHp: bossData.maxHp, attackRate: 3, movesWithoutDamage: 0 };
             this.currentGoals = {}; 
-            if(this.audio) this.audio.playBossMusic();
         } else {
             this.bossState.active = false;
             const goals = (levelConfig.goals && Object.keys(levelConfig.goals).length > 0) 
@@ -1038,7 +1313,6 @@ export class Game {
                 : { bee: 10 }; 
             
             this.setupGoalsUI(goals);
-            if(this.audio) this.audio.stopMusic();
         }
         this.resetGame();
     }
@@ -1117,11 +1391,12 @@ export class Game {
         if(this.audio) this.audio.playClick();
         this.updateControlsVisuals();
         
-        // --- ATUALIZADO: Textos corretos dos poderes ---
-        let msg = "MIRAR: ALVO ÚNICO";
-        if (hero === 'thalion') msg = "MIRAR: 3 BLOCOS";
-        if (hero === 'nyx') msg = "MIRAR: COLUNA INTEIRA";
-        if (hero === 'player') msg = "MIRAR: CORTE EM X";
+        // --- ATUALIZADO: Textos corretos dos poderes (com tradução) ---
+        let msg = this.i18n.t('game.aim_single'); // "MIRAR: ALVO ÚNICO"
+        if (hero === 'thalion') msg = this.i18n.t('game.aim_thalion'); // "MIRAR: 3 BLOCOS"
+        if (hero === 'nyx') msg = this.i18n.t('game.aim_nyx'); // "MIRAR: COLUNA INTEIRA"
+        if (hero === 'player') msg = this.i18n.t('game.aim_player'); // "MIRAR: CORTE EM X"
+		if (hero === 'mage') msg = this.i18n.t('game.aim_mage'); // <--- NOVO
         
         this.effects.showFloatingTextCentered(msg, "feedback-gold");
     }
@@ -1167,11 +1442,14 @@ export class Game {
         this.score = 0;
         this.interactionMode = null;
         this.comboState = { count: 0, lastClearTime: 0 }; 
+		const isWarrior = (this.playerClass === 'player');
         
         this.heroState = {
             thalion: { unlocked: false, used: false },
             nyx: { unlocked: false, used: false },
-            player:  { unlocked: false, used: false, lineCounter: 0 } 
+            player:  { unlocked: false, used: false, lineCounter: 0 },
+			mage: { unlocked: false, used: false, lineCounter: 0 }
+			
         };
 
         this.bossState.active = (this.currentLevelConfig?.type === 'boss');
@@ -1805,46 +2083,65 @@ export class Game {
             
             const comboCount = this.comboState.count;
 
-            // --- ATUALIZADO: DESBLOQUEIO E RENOVAÇÃO DE HERÓIS ---
             if (this.currentMode === 'adventure' && this.heroState) {
                 let unlockedSomething = false;
 
-                // Thalion: Combo x2 (Renova se bloqueado ou já usado)
+                // Thalion: Combo x2 
                 if (comboCount >= 2) {
                     if (!this.heroState.thalion.unlocked || this.heroState.thalion.used) {
                         this.heroState.thalion.unlocked = true;
                         this.heroState.thalion.used = false; 
-                        this.effects.showFloatingTextCentered("THALION PRONTO!", "feedback-gold");
+                        this.effects.showFloatingTextCentered(this.i18n.t('game.hero_thalion_ready'), "feedback-gold");
                         unlockedSomething = true;
                     }
                 }
                 
-                // Nyx: Combo x3 (Renova se bloqueado ou já usado)
+                // Nyx: Combo x3 
                 if (comboCount >= 3) {
                     if (!this.heroState.nyx.unlocked || this.heroState.nyx.used) {
                         this.heroState.nyx.unlocked = true;
                         this.heroState.nyx.used = false; 
-                        this.effects.showFloatingTextCentered("NYX PRONTO!", "feedback-epic");
+                        this.effects.showFloatingTextCentered(this.i18n.t('game.hero_nyx_ready'), "feedback-epic");
                         unlockedSomething = true;
                     }
                 }
                 
-                // PLAYER: Combo x4 OU 15 Linhas acumuladas
+                // PLAYER: Combo x4 OU 5 Linhas acumuladas
                 this.heroState.player.lineCounter = (this.heroState.player.lineCounter || 0) + linesCleared;
                 
-                const linesCondition = this.heroState.player.lineCounter >= 5;
-                const comboCondition = comboCount >= 4;
+                const playerLinesCond = this.heroState.player.lineCounter >= 5;
+                const comboCond = comboCount >= 4;
 
-                if (linesCondition || comboCondition) {
-                     // Zera o contador apenas se foi ativado por linhas, para reiniciar o ciclo
-                     if (linesCondition) {
+                if (playerLinesCond || comboCond) {
+                     if (playerLinesCond) {
                          this.heroState.player.lineCounter = 0; 
                      }
 
                      if (!this.heroState.player.unlocked || this.heroState.player.used) {
                         this.heroState.player.unlocked = true;
-                        this.heroState.player.used = false; // RENOVA A CARGA!
-                        this.effects.showFloatingTextCentered("ESPADA PRONTA!", "feedback-epic");
+                        this.heroState.player.used = false; 
+                        this.effects.showFloatingTextCentered(this.i18n.t('game.hero_player_ready'), "feedback-epic");
+                        unlockedSomething = true;
+                    }
+                }
+                
+                // MAGA: Combo x4 OU 5 Linhas acumuladas
+                this.heroState.mage.lineCounter = (this.heroState.mage.lineCounter || 0) + linesCleared;
+                const mageLinesCond = this.heroState.mage.lineCounter >= 5;
+
+                if (mageLinesCond || comboCond) {
+                    if (mageLinesCond) {
+                        this.heroState.mage.lineCounter = 0;
+                    }
+                     
+                    if (!this.heroState.mage.unlocked || this.heroState.mage.used) {
+                        this.heroState.mage.unlocked = true;
+                        this.heroState.mage.used = false;
+                        
+                        // Mostra feedback se o Player não tiver mostrado (para não sobrepor textos)
+                        if (!unlockedSomething) {
+                            this.effects.showFloatingTextCentered(this.i18n.t('game.hero_mage_ready'), "feedback-gold");
+                        }
                         unlockedSomething = true;
                     }
                 }
@@ -1855,7 +2152,6 @@ export class Game {
                 }
             }
 
-            // Feedback de Boss e Arcade
             if (this.bossState.active) {
                 this.effects.showComboFeedback(linesCleared, comboCount, 'normal'); 
                 if(this.audio) this.audio.playBossClear(linesCleared);

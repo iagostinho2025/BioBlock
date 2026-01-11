@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Block Lands: Adventure</title>
+    <title data-i18n="app.title">Block Lands: Adventure</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,7 +16,7 @@
 
     <div id="loading-screen" class="loading-overlay">
         <div class="loading-content">
-            <div class="loading-text" id="loading-text">Iniciando a jornada...</div>
+            <div class="loading-text" id="loading-text" data-i18n="loading.start_msg">Iniciando a jornada...</div>
             
             <div class="loading-bar-track">
                 <div class="loading-bar-fill" id="loading-bar-fill">
@@ -36,8 +36,8 @@
                     <div class="profile-row">
                         <div class="avatar-circle">🧑‍🚀</div>
                         <div class="profile-info">
-                            <span class="greeting">Bem vindo (a)</span>
-                            <span class="level-badge">Nível 1</span>
+                            <span class="greeting" data-i18n="sidebar.greeting">Bem vindo (a)</span>
+                            <span class="level-badge"><span data-i18n="sidebar.level_prefix">Nível</span> 1</span>
                         </div>
                     </div>
                     <div class="xp-container">
@@ -50,27 +50,27 @@
             
             <nav class="sidebar-nav">
                 <button class="sidebar-item">
-                    <span class="icon">🏆</span> Conquistas
+                    <span class="icon">🏆</span> <span data-i18n="sidebar.achievements">Conquistas</span>
                 </button>
                 <button class="sidebar-item highlight-gold">
-                    <span class="icon">💎</span> Loja de Mestres
+                    <span class="icon">💎</span> <span data-i18n="sidebar.store">Loja de Mestres</span>
                 </button>
                 <button class="sidebar-item">
-                    <span class="icon">📜</span> Como Jogar
+                    <span class="icon">📜</span> <span data-i18n="sidebar.how_to_play">Como Jogar</span>
                 </button>
                 
                 <div class="separator"></div>
                 
                 <button class="sidebar-item">
-                    <span class="icon">⚙️</span> Configurações
+                    <span class="icon">⚙️</span> <span data-i18n="sidebar.settings">Configurações</span>
                 </button>
             </nav>
             
             <div class="sidebar-footer">
-                <button class="footer-link">
+                <button class="footer-link" data-i18n="sidebar.terms">
                     🔒 Termos e Privacidade
                 </button>
-                <small>Block Lands: Adventure v1.0</small>
+                <small data-i18n="app.version">Block Lands: Adventure v1.0</small>
             </div>
         </aside>
 
@@ -96,13 +96,13 @@
             </section>
 
             <section class="game-modes-container">
-                <h3 class="section-title">MODOS DE JOGO</h3>
+                <h3 class="section-title" data-i18n="menu.modes_title">MODOS DE JOGO</h3>
                 
                 <div id="btn-mode-casual" class="mode-card card-classic">
                     <div class="card-icon-box">♾️</div>
                     <div class="card-texts">
-                        <h3>Modo Clássico</h3>
-                        <p>Sem tempo, apenas relaxe.</p>
+                        <h3 data-i18n="menu.classic_title">Modo Clássico</h3>
+                        <p data-i18n="menu.classic_desc">Sem tempo, apenas relaxe.</p>
                     </div>
                     <div class="card-arrow">➜</div>
                 </div>
@@ -110,8 +110,8 @@
                 <div id="btn-mode-adventure" class="mode-card card-adventure">
                     <div class="card-icon-box">⚔️</div>
                     <div class="card-texts">
-                        <h3>Modo Aventura</h3>
-                        <p>Derrote chefões e avance.</p>
+                        <h3 data-i18n="menu.adventure_title">Modo Aventura</h3>
+                        <p data-i18n="menu.adventure_desc">Derrote chefões e avance.</p>
                     </div>
                     <div class="card-arrow">➜</div>
                 </div>
@@ -119,10 +119,10 @@
                 <div id="btn-mode-blitz" class="mode-card card-blitz">
                     <div class="card-icon-box">⚡</div>
                     <div class="card-texts">
-                        <h3>Modo Blitz</h3>
-                        <p>Corra contra o tempo!</p>
+                        <h3 data-i18n="menu.blitz_title">Modo Blitz</h3>
+                        <p data-i18n="menu.blitz_desc">Corra contra o tempo!</p>
                     </div>
-                    <div class="card-tag">Novo</div>
+                    <div class="card-tag" data-i18n="menu.tag_new">Novo</div>
                 </div>
             </section>
         </div>
@@ -140,44 +140,103 @@
                 </div>
 
                 <div class="story-text-container">
-                    <h2 class="story-title">O Chamado</h2>
-                    
-                    <p class="story-line">Você… pode nos ouvir?</p>
-                    <p class="story-line">Meu nome é <span class="highlight-name">Thalion</span>.</p>
-                    
-                    <p class="story-paragraph">
-                        Sou um jovem elfo da floresta. Esta noite, tudo o que eu conhecia foi levado de mim.
-                        Eu estava com <span class="highlight-nyx">Nyx</span>, meu companheiro lobo, treinando entre as árvores quando o vento mudou.
-                    </p>
-
-                    <p class="story-paragraph">
-                        Nyx sentiu o perigo antes de qualquer som… e correu.
-                        Quando chegamos perto da vila, nos escondemos.
-                        Foi então que vimos o <span class="highlight-dark">Mago Negro</span>.
-                    </p>
-
-                    <p class="story-paragraph">
-                        Uma fumaça escura cobriu tudo. Minha família. Meus amigos.
-                        Todos desapareceram.
-                        Quando a fumaça sumiu… não havia ninguém.
-                    </p>
-
-                    <p class="story-paragraph">
-                        O mago partiu em direção ao seu castelo, além dos mundos que separam este lugar do fim.
-                        Eu sou jovem demais para enfrentá-lo sozinho.
-                    </p>
-                    
-                    <p class="story-highlight">
-                        Mas você… você carrega uma espada.<br>
-                        Se caminhar ao nosso lado, podemos alcançar o Castelo Sombrio.
-                    </p>
-
-                    <p class="story-footer">Nossa jornada começa agora.<br>👉 Você nos ajudará?</p>
+                    <h2 class="story-title" data-i18n="story.title">O Chamado</h2>
+                    <p class="story-line" data-i18n="story.line1">Você… pode nos ouvir?</p>
                 </div>
 
-                <button id="btn-start-adventure" class="btn-epic">
+                <button id="btn-start-adventure" class="btn-epic hidden" data-i18n="story.btn_start">
                     🗡️ Começar Aventura
                 </button>
+            </div>
+        </div>
+
+        <div id="screen-hero-select" class="screen hidden hero-select-layout">
+            <h2 class="hero-select-title" data-i18n="story.choose_title">QUEM É VOCÊ?</h2>
+            
+            <div class="heroes-container">
+                <div class="hero-card" id="card-warrior">
+                    <div class="card-visual">
+                        <img src="assets/img/card_warrior.png" alt="Guerreiro">
+                        <div class="card-glow glow-fire"></div>
+                    </div>
+                    <div class="card-info">
+                        <h3 data-i18n="story.warrior_name">Guerreiro</h3>
+                        <p data-i18n="story.warrior_desc">Força bruta e espada flamejante.</p>
+                    </div>
+                </div>
+
+                <div class="hero-card" id="card-mage">
+                    <div class="card-visual">
+                        <img src="assets/img/card_mage.png" alt="Maga">
+                        <div class="card-glow glow-light"></div>
+                    </div>
+                    <div class="card-info">
+                        <h3 data-i18n="story.mage_name">Maga</h3>
+                        <p data-i18n="story.mage_desc">Poder divino e controle de área.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="screen-settings" class="screen hidden settings-layout">
+            <header class="settings-header">
+                <button id="btn-settings-back" class="btn-round-icon">⬅</button>
+                <h2 data-i18n="settings.title">Configurações</h2>
+                <div style="width: 40px;"></div>
+            </header>
+
+            <div class="settings-content">
+                
+                <div class="settings-group">
+                    <h4 data-i18n="settings.audio_title">ÁUDIO & EFEITOS</h4>
+                    
+                    <div class="setting-row">
+                        <span data-i18n="settings.music">Música</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggle-music" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="setting-row">
+                        <span data-i18n="settings.sfx">Efeitos Sonoros</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggle-sfx" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="setting-row">
+                        <span data-i18n="settings.haptics">Vibração</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggle-haptics" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <h4 data-i18n="settings.lang_title">IDIOMA</h4>
+                    <div class="language-selector-large">
+                        <button id="btn-lang-en" class="btn-lang-large">
+                            <span class="flag">🇺🇸</span> English
+                        </button>
+                        <button id="btn-lang-pt" class="btn-lang-large">
+                            <span class="flag">🇧🇷</span> Português
+                        </button>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <h4 data-i18n="settings.data_title">DADOS</h4>
+                    <button id="btn-reset-progress" class="btn-danger" data-i18n="settings.reset_btn">
+                        Apagar Progresso
+                    </button>
+                </div>
+
+                <div class="settings-footer">
+                    <small>Block Lands v1.0.2</small>
+                </div>
             </div>
         </div>
 
@@ -191,7 +250,6 @@
                 </div>
 
             <div class="game-area">
-                
                 <div id="game-board">
                     </div>
 
@@ -212,9 +270,7 @@
                         <div class="pwr-count">0/3</div>
                     </button>
                 </div>
-
             </div>
-
         </div>
 
         <div id="modal-victory" class="modal hidden">
@@ -227,23 +283,23 @@
                 <div class="result-content">
                     
                     <div class="floating-section">
-                        <h3 class="section-label-shadow">Objetivos</h3>
+                        <h3 class="section-label-shadow" data-i18n="ui.objectives">Objetivos</h3>
                         <div id="victory-goals-grid" class="items-grid"></div>
                     </div>
 
                     <div id="victory-rewards-section" class="floating-section hidden">
-                        <h3 class="section-label-shadow" style="color: #fcd34d;">Recompensas</h3>
+                        <h3 class="section-label-shadow" style="color: #fcd34d;" data-i18n="ui.rewards">Recompensas</h3>
                         <div id="victory-rewards-grid" class="items-grid"></div>
                     </div>
 
                     <div class="result-score">
-                        <span>Pontuação:</span> <strong id="score-victory">0</strong>
+                        <span data-i18n="ui.score">Pontuação:</span> <strong id="score-victory">0</strong>
                     </div>
                 </div>
 
                 <div class="result-buttons-row">
-                    <button id="btn-next-level" class="btn-3d btn-3d-yellow">Continuar</button>
-                    <button id="btn-victory-back" class="btn-3d btn-3d-blue">Voltar</button>
+                    <button id="btn-next-level" class="btn-3d btn-3d-yellow" data-i18n="ui.btn_continue">Continuar</button>
+                    <button id="btn-victory-back" class="btn-3d btn-3d-blue" data-i18n="ui.btn_back">Voltar</button>
                 </div>
 
             </div>
@@ -259,24 +315,23 @@
                 <div class="result-content">
                     
                     <div class="floating-section">
-                        <h3 class="section-label-shadow">Progresso</h3>
-                        <div id="fail-goals-grid" class="items-grid">
-                            </div>
+                        <h3 class="section-label-shadow" data-i18n="ui.progress">Progresso</h3>
+                        <div id="fail-goals-grid" class="items-grid"></div>
                     </div>
 
                     <div id="fail-rewards-section" class="floating-section hidden">
-                        <h3 class="section-label-shadow" style="color: #fcd34d;">Recompensas</h3>
+                        <h3 class="section-label-shadow" style="color: #fcd34d;" data-i18n="ui.rewards">Recompensas</h3>
                         <div id="fail-rewards-grid" class="items-grid"></div>
                     </div>
 
                     <div class="result-score">
-                        <span>Pontuação:</span> <strong id="score-final">0</strong>
+                        <span data-i18n="ui.score">Pontuação:</span> <strong id="score-final">0</strong>
                     </div>
                 </div>
 
                 <div class="result-buttons-row">
-                    <button id="btn-restart-over" class="btn-3d btn-3d-yellow">Reiniciar</button>
-                    <button id="btn-quit-over" class="btn-3d btn-3d-blue">Voltar</button>
+                    <button id="btn-restart-over" class="btn-3d btn-3d-yellow" data-i18n="ui.btn_restart">Reiniciar</button>
+                    <button id="btn-quit-over" class="btn-3d btn-3d-blue" data-i18n="ui.btn_back">Voltar</button>
                 </div>
 
             </div>
