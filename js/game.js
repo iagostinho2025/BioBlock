@@ -35,9 +35,10 @@ export class Game {
         // Elementos DOM
         this.screenMenu = document.getElementById('screen-menu');
         this.screenLevels = document.getElementById('screen-levels');
-        this.screenStory = document.getElementById('screen-story'); // NOVO
+        this.screenStory = document.getElementById('screen-story'); 
+        this.screenHeroSelect = document.getElementById('screen-hero-select'); // NOVO
         this.screenGame = document.getElementById('screen-game');
-        this.screenSettings = document.getElementById('screen-settings'); // NOVO
+        this.screenSettings = document.getElementById('screen-settings'); 
         
         // Configurações Padrão
         this.settings = {
@@ -45,8 +46,11 @@ export class Game {
             sfx: true,
             haptics: true
         };
-        this.loadSettings(); // Carrega do localStorage
+        this.loadSettings(); 
         
+        // --- NOVO: Carrega a classe do jogador (se já escolheu) ---
+        this.playerClass = localStorage.getItem('blocklands_player_class') || null; 
+
         this.boardEl = document.getElementById('game-board');
         this.dockEl = document.getElementById('dock');
         this.goalsArea = document.getElementById('goals-area');
@@ -55,7 +59,7 @@ export class Game {
         this.scoreOverEl = document.getElementById('score-final');
         this.scoreWinEl = document.getElementById('score-victory');
         this.comboState = { count: 0, lastClearTime: 0 };
-		this.assetsLoaded = false; // Começa falso
+        this.assetsLoaded = false; 
 
         // Estado do Jogo
         this.currentMode = 'casual'; 
@@ -67,21 +71,302 @@ export class Game {
         this.collected = {};
         this.score = 0;
         this.activeSnap = null; 
-        this.i18n = new I18nSystem(); // ADICIONADO: Inicialização do sistema de idiomas
-		this.preloadAssets();
+        this.i18n = new I18nSystem(); 
+        this.preloadAssets();
         
         // Power-Ups
         this.powerUps = { bomb: 0, rotate: 0, swap: 0 };
-        this.interactionMode = null; // 'bomb', 'rotate', ou null
+        this.interactionMode = null; 
         
         // Sistemas
         this.effects = new EffectsSystem();
         this.audio = new AudioSystem();
-		this.powers = new PowersSystem(this);
+        this.powers = new PowersSystem(this);
         this.maxUnlockedLevel = 99; 
+        
+        // Controle da História
+        this.storyStep = 0; // Para controlar os slides
 
         this.setupMenuEvents();
-		this.startLoadingSequence();
+        this.startLoadingSequence();
+    }
+	
+	// --- PERSISTÊNCIA DE ESTADO (SAVE GAME) ---
+
+    saveGameState() {
+        // Só salvamos no modo aventura para evitar conflitos
+        if (this.currentMode !== 'adventure' || !this.currentLevelConfig) return;
+
+        // Monta o objeto de estado
+        const state = {
+            levelId: this.currentLevelConfig.id,
+            grid: this.grid,
+            score: this.score,
+            hand: this.currentHand,
+            bossState: this.bossState,
+            heroState: this.heroState,
+            currentGoals: this.currentGoals,
+            collected: this.collected,
+            comboState: this.comboState,
+            powerUps: this.powerUps // Salva qtd de powerups atual
+        };
+
+        try {
+            localStorage.setItem('blocklands_savestate', JSON.stringify(state));
+        } catch (e) {
+            console.warn('Falha ao salvar jogo:', e);
+        }
+    }
+	
+	// --- NOVO SISTEMA DE HISTÓRIA E SELEÇÃO ---
+
+    checkAdventureIntro() {
+        // Verifica se já tem classe escolhida
+        const hasClass = localStorage.getItem('blocklands_player_class');
+        
+        if (hasClass) {
+            // Se já tem classe, assume que já viu a intro e vai pro mapa
+            this.showWorldSelect();
+        } else {
+            // Primeira vez: História -> Seleção -> Tutorial
+            this.playStory();
+        }
+    }
+
+    playStory() {
+        this.showScreen(this.screenStory);
+        this.toggleGlobalHeader(false);
+        this.storyStep = 0;
+        this.renderStorySlide();
+
+        // Configura botões da tela de história (caso não tenham sido configurados no setupMenuEvents)
+        // Dica: Idealmente mova esses listeners para setupMenuEvents, mas aqui garante que funcione agora
+        const btnNext = document.getElementById('btn-next-slide');
+        const btnSkip = document.getElementById('btn-skip-story');
+        
+        // Remove listeners antigos para evitar duplicação (cloneNode trick)
+        if(btnNext) {
+            const newNext = btnNext.cloneNode(true);
+            btnNext.parentNode.replaceChild(newNext, btnNext);
+            newNext.onclick = () => {
+                if(this.audio) this.audio.playClick();
+                this.storyStep++;
+                this.renderStorySlide();
+            };
+        }
+
+        if(btnSkip) {
+            const newSkip = btnSkip.cloneNode(true);
+            btnSkip.parentNode.replaceChild(newSkip, btnSkip);
+            newSkip.onclick = () => {
+                if(this.audio) this.audio.playClick();
+                this.showHeroSelection();
+            };
+        }
+    }
+
+    renderStorySlide() {
+        const textEl = document.getElementById('story-text');
+        const imgEl = document.getElementById('story-reaction-img');
+        
+        if (!textEl || !imgEl) return;
+
+        // Roteiro de Textos (Traduzidos)
+        const slidesTxt = [
+            this.i18n.t('story_slides.1'),
+            this.i18n.t('story_slides.2'),
+            this.i18n.t('story_slides.3'),
+            this.i18n.t('story_slides.4'),
+            this.i18n.t('story_slides.5'),
+            this.i18n.t('story_slides.6')
+        ];
+
+        // Mapeamento de Imagens (Uma para cada passo, nomes definidos no Passo 0)
+        const slidesImg = [
+            'assets/img/thalion_story_1.png',
+            'assets/img/thalion_story_2.png',
+            'assets/img/thalion_story_3.png',
+            'assets/img/thalion_story_4.png',
+            'assets/img/thalion_story_5.png',
+            'assets/img/thalion_story_6.png'
+        ];
+
+        if (this.storyStep < slidesTxt.length) {
+            // 1. FADE OUT: Esconde o conteúdo atual
+            textEl.style.opacity = 0;
+            imgEl.style.opacity = 0;
+
+            // 2. Aguarda o fade out (200ms), troca o conteúdo e faz FADE IN
+            setTimeout(() => {
+                // Troca o texto
+                textEl.innerText = slidesTxt[this.storyStep];
+                
+                // Troca a imagem (se existir para este passo)
+                if (slidesImg[this.storyStep]) {
+                    imgEl.src = slidesImg[this.storyStep];
+                }
+
+                // Força o navegador a renderizar a nova imagem antes de mostrar
+                requestAnimationFrame(() => {
+                    textEl.style.opacity = 1;
+                    imgEl.style.opacity = 1;
+                });
+            }, 200); // Tempo do fade out
+
+        } else {
+            // Fim da história -> Seleção
+            this.showHeroSelection();
+        }
+    }
+
+    showHeroSelection() {
+        this.showScreen(this.screenHeroSelect);
+        this.toggleGlobalHeader(false);
+    }
+
+    selectHero(heroId) {
+        if(this.audio) {
+            this.audio.playClick();
+            if (heroId === 'warrior') this.audio.playSword(); 
+            if (heroId === 'mage') this.audio.playMage();
+        }
+
+        // Salva a escolha
+        this.playerClass = heroId;
+        localStorage.setItem('blocklands_player_class', heroId);
+
+        // Feedback visual no card
+        const card = document.getElementById(`card-${heroId}`);
+        if(card) {
+            card.style.transform = 'scale(1.05)';
+            card.style.borderColor = '#fbbf24';
+            card.style.boxShadow = '0 0 30px rgba(251, 191, 36, 0.4)';
+        }
+
+        // Aguarda 800ms (tempo de ver o card brilhar) e inicia a transição fake
+        setTimeout(() => {
+            this.runHeroTransition(heroId);
+        }, 800);
+    }
+	
+	runHeroTransition(heroId) {
+        const screen = document.getElementById('loading-screen');
+        const bar = document.getElementById('loading-bar-fill');
+        const text = document.getElementById('loading-text');
+
+        if (!screen || !bar) return;
+
+        // 1. Prepara a tela (Reseta o estado anterior)
+        screen.classList.remove('fade-out');
+        screen.style.display = 'flex';
+        screen.style.opacity = '1';
+        bar.style.width = '0%';
+
+        // 2. Define os textos baseados na classe
+        const msg1 = (heroId === 'warrior') ? this.i18n.t('hero_loading.warrior_1') : this.i18n.t('hero_loading.mage_1');
+        const msg2 = (heroId === 'warrior') ? this.i18n.t('hero_loading.warrior_2') : this.i18n.t('hero_loading.mage_2');
+        const msgFinal = this.i18n.t('hero_loading.common');
+
+        if(text) text.innerText = msg1;
+
+        // 3. Animação Fake (Barra enchendo)
+        let progress = 0;
+        const duration = 2500; // 2.5 segundos de "loading"
+        const intervalTime = 30;
+        const steps = duration / intervalTime;
+        const increment = 100 / steps;
+
+        const interval = setInterval(() => {
+            progress += increment;
+            
+            // Variação orgânica na velocidade (dá uma travadinha nos 70% pra parecer real)
+            if (progress > 70 && progress < 80) progress -= (increment * 0.5); 
+
+            // Atualiza visual
+            bar.style.width = Math.min(progress, 100) + '%';
+
+            // Troca de texto em 40% e 80%
+            if (progress > 40 && progress < 80 && text) text.innerText = msg2;
+            if (progress >= 80 && text) text.innerText = msgFinal;
+
+            // FIM DO LOADING
+            if (progress >= 100) {
+                clearInterval(interval);
+                bar.style.width = '100%';
+                
+                // Pequeno delay final antes de sumir
+                setTimeout(() => {
+                    // Inicia o nível de verdade (por trás da cortina)
+                    const tutorialWorld = WORLDS.find(w => w.id === 'tutorial_world');
+                    if (tutorialWorld) {
+                        const tutorialLevel = tutorialWorld.levels[0];
+                        this.startAdventureLevel(tutorialLevel);
+                    }
+
+                    // Fade out da tela de loading
+                    screen.classList.add('fade-out');
+                    setTimeout(() => {
+                        screen.style.display = 'none';
+                    }, 800);
+
+                }, 500);
+            }
+        }, intervalTime);
+    }
+
+    restoreGameState(targetLevelId) {
+        const raw = localStorage.getItem('blocklands_savestate');
+        if (!raw) return false;
+
+        try {
+            const state = JSON.parse(raw);
+            
+            // Segurança: Só carrega se o save for do mesmo nível que estamos tentando abrir
+            if (state.levelId !== targetLevelId) return false;
+
+            // Restaura os dados
+            this.grid = state.grid;
+            this.score = state.score;
+            this.currentHand = state.hand;
+            this.bossState = state.bossState;
+            this.heroState = state.heroState;
+            this.currentGoals = state.currentGoals;
+            this.collected = state.collected;
+            this.comboState = state.comboState || { count: 0, lastClearTime: 0 };
+            
+            // Recarrega Powerups (caso tenha gasto e não atualizado)
+            if (state.powerUps) {
+                this.powerUps = state.powerUps;
+                this.savePowerUps(); // Sincroniza com o storage de powerups global
+            }
+
+            // Atualiza a UI Visualmente
+            this.renderGrid();
+            this.renderDock();
+            this.renderControlsUI(); // Atualiza botões de herói/powerup
+
+            if (this.bossState.active) {
+                this.setupBossUI(this.currentLevelConfig.boss); // Recria a estrutura HTML
+                this.updateBossUI(); // Atualiza a vida
+            } else {
+                this.setupGoalsUI(this.currentGoals); // Recria estrutura
+                this.updateGoalsUI(); // Atualiza números
+            }
+
+            // Se for fase normal, temos que garantir que a UI de gols reflete o coletado
+            if (!this.bossState.active) {
+                this.updateGoalsUI();
+            }
+
+            return true; // Sucesso
+        } catch (e) {
+            console.error('Erro ao carregar save:', e);
+            return false;
+        }
+    }
+
+    clearSavedGame() {
+        localStorage.removeItem('blocklands_savestate');
     }
 
     loadSettings() {
@@ -176,8 +461,6 @@ export class Game {
         localStorage.setItem('powerup_rotate', this.powerUps.rotate);
         localStorage.setItem('powerup_swap', this.powerUps.swap);
         this.updateControlsVisuals();
-		this.screenHeroSelect = document.getElementById('screen-hero-select');
-        this.playerClass = localStorage.getItem('blocklands_class') || 'warrior'; // Padrão
     }
 	
 	// --- SEQUÊNCIA VISUAL INTELIGENTE ---
@@ -263,80 +546,71 @@ export class Game {
         const bindClick = (id, action) => {
             const el = document.getElementById(id);
             if(el) {
-                el.addEventListener('click', (e) => {
+                // Remove listeners antigos para evitar duplicação se o setup rodar 2x
+                const newEl = el.cloneNode(true); 
+                el.parentNode.replaceChild(newEl, el);
+                
+                newEl.addEventListener('click', (e) => {
                     if (this.audio) this.audio.playClick();
                     action(e);
                 });
             }
         };
 
-        // Navegação
+        // Navegação Principal
         bindClick('btn-mode-casual', () => this.startCasualMode());
-        
-        // --- ALTERADO: Agora chama a verificação de história ---
         bindClick('btn-mode-adventure', () => this.checkAdventureIntro()); 
-        
-        // ATUALIZADO: Usando this.i18n.t() para a mensagem de "em breve"
         bindClick('btn-mode-blitz', () => alert(this.i18n.t('menu.blitz_coming_soon')));
-        
-        // --- NOVO: Botão dentro da tela de história ---
-        bindClick('btn-start-adventure', () => {
-            // Marca que já viu a história
-            localStorage.setItem('blocklands_intro_seen', 'true');
-            // Vai para o mapa de mundos
-            this.showWorldSelect();
-        });
-
         bindClick('btn-back-menu', () => this.showScreen(this.screenMenu));
         bindClick('btn-quit-game', () => this.showScreen(this.screenMenu));
         
-        // Botão Reiniciar na derrota
+        // --- NOVOS BOTÕES DA HISTÓRIA (Agora configurados aqui para sempre funcionarem) ---
+        bindClick('btn-next-slide', () => {
+            this.storyStep++;
+            this.renderStorySlide();
+        });
+
+        bindClick('btn-skip-story', () => {
+            this.showHeroSelection();
+        });
+
+        bindClick('btn-start-adventure', () => {
+            localStorage.setItem('blocklands_intro_seen', 'true');
+            this.showWorldSelect();
+        });
+        // -------------------------------------------------------------------------------
+
+        // Botões de Game Over / Vitória
         bindClick('btn-restart-over', () => this.retryGame());
         
-        // --- CORREÇÃO AQUI: Botão Voltar da tela de derrota ---
         bindClick('btn-quit-over', () => {
             this.modalOver.classList.add('hidden');
-            
             if (this.currentMode === 'adventure') {
-                // Modo Aventura: Volta para o MAPA DA FASE
                 this.showScreen(this.screenLevels);
                 const currentWorld = WORLDS.find(w => w.levels.some(l => l.id === this.currentLevelConfig?.id));
-                if (currentWorld) {
-                    this.openWorldMap(currentWorld);
-                } else {
-                    this.showWorldSelect();
-                }
+                if (currentWorld) this.openWorldMap(currentWorld);
+                else this.showWorldSelect();
             } else {
-                // Modo Casual: Volta para o MENU
                 this.showScreen(this.screenMenu);
             }
         });
         
-        // Eventos dos Power-Ups
+        // Power-Ups
         bindClick('pwr-bomb', () => this.activatePowerUp('bomb'));
         bindClick('pwr-rotate', () => this.activatePowerUp('rotate'));
         bindClick('pwr-swap', () => this.activatePowerUp('swap'));
         
-        // --- NOVOS BOTÕES DE VITÓRIA (Padrão 2 Botões) ---
-        
-        // 1. Botão "Continuar" (Amarelo)
+        // Lógica de Vitória (Continuar/Voltar)
         const btnNextLevel = document.getElementById('btn-next-level');
         if (btnNextLevel) {
-            btnNextLevel.addEventListener('click', () => {
+            const newBtn = btnNextLevel.cloneNode(true);
+            btnNextLevel.parentNode.replaceChild(newBtn, btnNextLevel);
+            newBtn.addEventListener('click', () => {
                 if(this.audio) this.audio.playClick();
                 this.modalWin.classList.add('hidden');
                 
                 if(this.currentMode === 'adventure') {
-                    // Tenta ir para o próximo nível
                     const currentWorld = WORLDS.find(w => w.levels.some(l => l.id === this.currentLevelConfig?.id));
-                    const nextLevelId = this.currentLevelConfig.id + 1;
-                    
-                    // Verifica se existe próximo nível no mesmo mundo ou global
-                    // Lógica simplificada: Reabre o mapa para o jogador clicar no próximo (padrão Candy Crush)
-                    // Ou inicia direto:
-                    // this.startAdventureLevel(ProximoNivelConfig); 
-                    
-                    // Vamos manter o fluxo de voltar ao mapa para ver o progresso
                     if (currentWorld) {
                         this.showScreen(this.screenLevels);
                         this.openWorldMap(currentWorld);
@@ -344,70 +618,57 @@ export class Game {
                         this.showWorldSelect();
                     }
                 } else {
-                    // Se for Casual/Bonus, "Continuar" reinicia ou volta pro menu
-                    this.retryGame(); // Ou volta pro menu, depende da preferência
+                    this.retryGame(); 
                 }
             });
         }
 
-        // 2. Botão "Voltar" (Azul)
         const btnVictoryBack = document.getElementById('btn-victory-back');
         if (btnVictoryBack) {
-            btnVictoryBack.addEventListener('click', () => {
+            const newBtn = btnVictoryBack.cloneNode(true);
+            btnVictoryBack.parentNode.replaceChild(newBtn, btnVictoryBack);
+            newBtn.addEventListener('click', () => {
                 if(this.audio) this.audio.playBack();
                 this.modalWin.classList.add('hidden');
-                
                 if (this.currentMode === 'adventure') {
-                    // Volta para o Mapa
                     this.showScreen(this.screenLevels);
                     const currentWorld = WORLDS.find(w => w.levels.some(l => l.id === this.currentLevelConfig?.id));
                     if (currentWorld) this.openWorldMap(currentWorld);
                     else this.showWorldSelect();
                 } else {
-                    // Volta para o Menu Principal
                     this.showScreen(this.screenMenu);
                 }
             });
         }
 
-        // ADICIONADO: Lógica de Idioma
+        // Idioma e Sidebar
         const btnEn = document.getElementById('btn-lang-en');
         const btnPt = document.getElementById('btn-lang-pt');
-        
         const updateLangUI = () => {
             if(btnEn && btnPt) {
                 btnEn.style.background = (this.i18n.currentLang === 'en') ? '#fbbf24' : 'rgba(255,255,255,0.1)';
                 btnEn.style.color = (this.i18n.currentLang === 'en') ? '#000' : '#fff';
-                
                 btnPt.style.background = (this.i18n.currentLang === 'pt-BR') ? '#fbbf24' : 'rgba(255,255,255,0.1)';
                 btnPt.style.color = (this.i18n.currentLang === 'pt-BR') ? '#000' : '#fff';
             }
         };
-        updateLangUI(); // Roda ao iniciar
+        updateLangUI(); 
 
         if(btnEn) btnEn.addEventListener('click', async () => {
             if(this.audio) this.audio.playClick();
             await this.i18n.changeLanguage('en');
             updateLangUI();
-            
-            // SÓ recarrega o mapa se o jogador JÁ ESTIVER na tela de mapa
-            if (this.screenLevels.classList.contains('active-screen')) {
-                this.showWorldSelect();
-            }
+            if (this.screenLevels.classList.contains('active-screen')) this.showWorldSelect();
         });
 
         if(btnPt) btnPt.addEventListener('click', async () => {
             if(this.audio) this.audio.playClick();
             await this.i18n.changeLanguage('pt-BR');
             updateLangUI();
-            
-            // SÓ recarrega o mapa se o jogador JÁ ESTIVER na tela de mapa
-            if (this.screenLevels.classList.contains('active-screen')) {
-                this.showWorldSelect();
-            }
+            if (this.screenLevels.classList.contains('active-screen')) this.showWorldSelect();
         });
 
-        // Sidebar
+        // Sidebar Toggles
         const btnOpen = document.getElementById('btn-open-sidebar');
         const sidebar = document.getElementById('app-sidebar');
         const overlay = document.getElementById('menu-overlay');
@@ -420,22 +681,13 @@ export class Game {
         if(btnClose) btnClose.addEventListener('click', () => { if(this.audio) this.audio.playBack(); toggleSidebar(false); });
         if(overlay) overlay.addEventListener('click', () => { if(this.audio) this.audio.playBack(); toggleSidebar(false); });
         
-        // Inicializa a lógica da tela de configurações
         this.setupSettingsLogic();
 
-        // Botão "Configurações" na Sidebar
         const btnSettings = document.querySelector('.sidebar-item span[data-i18n="sidebar.settings"]')?.parentNode;
-        
         if (btnSettings) {
             btnSettings.addEventListener('click', () => {
                 if(this.audio) this.audio.playClick();
-                // Fecha sidebar e abre settings
-                const sidebar = document.getElementById('app-sidebar');
-                const overlay = document.getElementById('menu-overlay');
-                sidebar.classList.remove('open');
-                overlay.classList.remove('visible');
-                setTimeout(()=>overlay.classList.add('hidden'),300);
-                
+                toggleSidebar(false);
                 this.showScreen(this.screenSettings);
             });
         }
@@ -513,106 +765,26 @@ export class Game {
 
     // --- NOVO: Verifica se o jogador já viu a intro ---
     checkAdventureIntro() {
-        // Verifica se já completou o tutorial (Fase 0)
-        const progress = this.loadProgress();
+        const hasSeen = localStorage.getItem('blocklands_intro_seen');
         
-        if (progress > 0) {
-            // Já passou do tutorial -> Vai pro mapa
+        if (hasSeen === 'true') {
+            // Se já viu, vai direto para o mapa
             this.showWorldSelect();
         } else {
-            // Nunca jogou -> Começa a Jornada Cinematográfica
-            this.startCinematicIntro();
+            // Se é a primeira vez, mostra a história
+            this.playStory();
         }
-    }
-
-    startCinematicIntro() {
-        // PASSO 1: História Trágica (Texto)
-        this.showScreen(this.screenStory);
-        this.toggleGlobalHeader(false);
-        
-        const container = this.screenStory.querySelector('.story-text-container');
-        container.innerHTML = `
-            <h2 class="story-title fade-in">${this.i18n.t('story.title')}</h2>
-            <p class="story-paragraph fade-in-delay-1">${this.i18n.t('story.intro_p1')}</p>
-            <p class="story-paragraph fade-in-delay-2">${this.i18n.t('story.intro_p2')}</p>
-            <button id="btn-intro-next" class="btn-epic fade-in-delay-3" style="margin-top:30px;">
-                ${this.i18n.t('ui.btn_continue')} ➜
-            </button>
-        `;
-
-        // Imagem de fundo da história
-        const visual = this.screenStory.querySelector('.story-image-placeholder');
-        if(visual) visual.style.backgroundImage = "url('assets/img/bg_story.png')";
-
-        document.getElementById('btn-intro-next').onclick = () => {
-            if(this.audio) this.audio.playClick();
-            this.showHeroSelection();
-        };
-    }
-
-    showHeroSelection() {
-        // PASSO 2: A Escolha
-        this.showScreen(this.screenHeroSelect);
-        
-        // Eventos dos Cards
-        const cardWarrior = document.getElementById('card-warrior');
-        const cardMage = document.getElementById('card-mage');
-        
-        cardWarrior.onclick = () => this.selectHero('player'); // player = guerreiro no código antigo
-        cardMage.onclick = () => this.selectHero('mage');
-    }
-
-    selectHero(heroId) {
-        // Salva a escolha
-        this.playerClass = heroId;
-        localStorage.setItem('blocklands_class', heroId);
-        
-        if(this.audio) {
-            if(heroId === 'player') this.audio.playSword();
-            else this.audio.playMage();
-        }
-
-        // Feedback Visual
-        const card = document.getElementById(heroId === 'player' ? 'card-warrior' : 'card-mage');
-        card.classList.add('selected');
-
-        // Aguarda 1s para efeito dramático e vai para o texto final
-        setTimeout(() => {
-            this.showFinalDialogue(heroId);
-        }, 1000);
-    }
-
-    showFinalDialogue(heroId) {
-        // PASSO 3: A Confirmação
-        this.showScreen(this.screenStory);
-        
-        const replyText = (heroId === 'player') 
-            ? this.i18n.t('story.reply_warrior') 
-            : this.i18n.t('story.reply_mage');
-
-        const container = this.screenStory.querySelector('.story-text-container');
-        container.innerHTML = `
-            <h2 class="story-title" style="color:#fbbf24">${this.i18n.t('story.choose_title')}</h2>
-            <p class="story-highlight">${replyText}</p>
-            <p class="story-paragraph">${this.i18n.t('story.final_call')}</p>
-            
-            <button id="btn-start-tutorial" class="btn-epic wobble-vertical" style="margin-top:30px; background: #dc2626;">
-                ${this.i18n.t('story.btn_fight')}
-            </button>
-        `;
-
-        document.getElementById('btn-start-tutorial').onclick = () => {
-            if(this.audio) this.audio.playClick();
-            // INICIA O TUTORIAL (Fase 0)
-            const tutorialLevel = WORLDS[0].levels[0];
-            this.startAdventureLevel(tutorialLevel);
-        };
     }
 
     // --- NOVO: Exibe a tela de história ---
     playStory() {
         this.showScreen(this.screenStory);
         this.toggleGlobalHeader(false); // Esconde o header de moedas/nível para imersão
+        this.storyStep = 0;
+        this.renderStorySlide();
+        
+        // NOTA: Os eventos dos botões btn-next-slide e btn-skip-story
+        // agora são gerenciados no setupMenuEvents, evitando bugs de recriação.
     }
 
     // --- POWER-UP LOGIC ---
@@ -683,7 +855,7 @@ export class Game {
         }
         controlsContainer.innerHTML = '';
 
-        // GRUPO ESQUERDA: Itens (AGORA COM ÍMÃ)
+        // GRUPO ESQUERDA: Itens
         const leftGroup = document.createElement('div');
         leftGroup.className = 'controls-group';
         
@@ -692,8 +864,6 @@ export class Game {
             btn.className = `ctrl-btn pwr-${p.id}`;
             btn.id = `btn-pwr-${p.id}`;
             const count = this.powerUps[p.id] || 0;
-            // Mostra apenas "1" se tiver, ou "0" (Quantidade unitária conforme pedido)
-            // Mas mantendo a lógica numérica caso você dê recompensas
             btn.innerHTML = `${p.icon}<span class="ctrl-count">${count}</span>`;
             
             if (count <= 0) btn.classList.add('disabled');
@@ -706,13 +876,19 @@ export class Game {
         rightGroup.className = 'controls-group';
 
         if (this.currentMode === 'adventure') {
+            // Lista base de companheiros
             const heroes = [
                 { id: 'thalion', icon: '🧝‍♂️' }, 
-                { id: 'nyx',     icon: '🐺' },
-                { id: 'player',  icon: '⚔️' },
-				{ id: 'mage',    icon: '🧙‍♀️' },
-				{ id: this.playerClass, icon: (this.playerClass === 'player' ? '⚔️' : '🧙‍♀️') }
+                { id: 'nyx',     icon: '🐺' }
             ];
+
+            // Adiciona APENAS o herói escolhido pelo jogador
+            if (this.playerClass === 'mage') {
+                heroes.push({ id: 'mage', icon: '🧙‍♀️' });
+            } else {
+                // Padrão é guerreiro se não tiver classe (ou se for warrior)
+                heroes.push({ id: 'player', icon: '⚔️' });
+            }
 
             heroes.forEach(h => {
                 const btn = document.createElement('div');
@@ -793,7 +969,8 @@ export class Game {
             if(this.audio) this.audio.stopMusic();
         }
         
-        [this.screenMenu, this.screenLevels, this.screenStory, this.screenGame, this.screenSettings].forEach(s => {
+        // Adicione this.screenHeroSelect à lista de telas para esconder
+        [this.screenMenu, this.screenLevels, this.screenStory, this.screenGame, this.screenSettings, this.screenHeroSelect].forEach(s => {
             if(s) {
                 s.classList.remove('active-screen');
                 s.classList.add('hidden');
@@ -803,7 +980,12 @@ export class Game {
         if (screenEl === this.screenMenu) {
             this.toggleGlobalHeader(false); 
         } else {
-            this.toggleGlobalHeader(true);
+            // A tela de seleção e história também escondem o header
+            if (screenEl === this.screenStory || screenEl === this.screenHeroSelect) {
+                this.toggleGlobalHeader(false);
+            } else {
+                this.toggleGlobalHeader(true);
+            }
         }
 
         if(screenEl) {
@@ -1284,23 +1466,26 @@ export class Game {
         this.currentLevelConfig = levelConfig;
         this.showScreen(this.screenGame);
         
-        // --- ATUALIZAÇÃO: LÓGICA DE MÚSICA INTELIGENTE ---
         if (this.audio) {
-            // 1. Se a fase tem uma música específica (Elite ou Boss Final)
             if (levelConfig.musicId) {
                 this.audio.playMusic(levelConfig.musicId);
             } 
-            // 2. Fallback: Se for Boss antigo sem ID, toca tema genérico
             else if (levelConfig.type === 'boss') {
                 this.audio.playBossMusic();
             } 
-            // 3. Fases normais: Silêncio (foco no SFX) ou música ambiente se tiver
             else {
                 this.audio.stopMusic();
             }
         }
-        // --------------------------------------------------
 
+        // TENTATIVA DE RESTAURAR JOGO SALVO
+        if (this.restoreGameState(levelConfig.id)) {
+            // REMOVIDO: A mensagem visual "JOGO RESGATADO" não aparece mais.
+            // O jogo apenas continua silenciosamente.
+            return;
+        }
+
+        // Se não tinha save, inicia do zero normalmente
         if (levelConfig.type === 'boss') {
             const bossData = levelConfig.boss || { id: 'dragon', name: 'Dragão', emoji: '🐉', maxHp: 50 };
             this.setupBossUI(bossData);
@@ -1431,10 +1616,26 @@ export class Game {
     retryGame() {
         this.modalOver.classList.add('hidden');
         this.modalWin.classList.add('hidden');
-        if (this.currentMode === 'adventure' && this.bossState.active) {
-            if(this.audio) this.audio.playBossMusic();
+        
+        // SOLUÇÃO DEFINITIVA DE ÁUDIO:
+        // Paramos o som atual manualmente para garantir silêncio imediato
+        if (this.audio) this.audio.stopMusic();
+
+        if (this.currentMode === 'adventure' && this.currentLevelConfig) {
+            // TRUQUE: Em vez de apenas resetar o grid (resetGame), 
+            // nós chamamos a função que inicia a fase do zero.
+            // Isso força o sistema de áudio a carregar a música da forma correta,
+            // exatamente como acontece quando você entra na fase pela primeira vez.
+            
+            // Um micro-delay de 10ms apenas para o navegador processar o 'stopMusic' acima
+            setTimeout(() => {
+                this.startAdventureLevel(this.currentLevelConfig);
+            }, 10);
+            
+        } else {
+            // Modo Casual (sem música específica de boss, reset simples funciona)
+            this.resetGame();
         }
-        this.resetGame();
     }
 
     resetGame() {
@@ -1442,7 +1643,6 @@ export class Game {
         this.score = 0;
         this.interactionMode = null;
         this.comboState = { count: 0, lastClearTime: 0 }; 
-		const isWarrior = (this.playerClass === 'player');
         
         this.heroState = {
             thalion: { unlocked: false, used: false },
@@ -1482,53 +1682,9 @@ export class Game {
 
     // --- EFEITO VISUAL: Partículas ---
     spawnExplosion(rect, colorClass) {
-        const colors = {
-            'type-fire': '#ef4444',
-            'type-water': '#3b82f6',
-            'type-forest': '#22c55e',
-            'type-mountain': '#78716c',
-            'type-ice': '#06b6d4',
-            'type-zombie': '#84cc16',
-            'type-bee': '#eab308',
-            'type-ghost': '#a855f7',
-            'type-cop': '#1e40af',
-            'type-normal': '#3b82f6',
-            'lava': '#b91c1c'
-        };
-        
-        const bg = colors[colorClass] || '#3b82f6';
-
-        for (let i = 0; i < 8; i++) {
-            const debris = document.createElement('div');
-            debris.classList.add('debris-particle');
-            
-            debris.style.position = 'fixed';
-            debris.style.zIndex = '9999';
-            debris.style.pointerEvents = 'none';
-            debris.style.width = `${Math.random() * 12 + 12}px`;
-            debris.style.height = debris.style.width;
-            
-            debris.style.backgroundColor = bg;
-            
-            const startX = rect.left + (rect.width / 2) + (Math.random() * 30 - 15);
-            const startY = rect.top + (rect.height / 2) + (Math.random() * 30 - 15);
-            
-            debris.style.left = `${startX}px`;
-            debris.style.top = `${startY}px`;
-
-            const tx = (Math.random() * 240 - 120) + 'px';
-            const ty = (Math.random() * 240 - 120) + 'px';
-            const rot = (Math.random() * 720) + 'deg';
-
-            debris.style.setProperty('--tx', tx);
-            debris.style.setProperty('--ty', ty);
-            debris.style.setProperty('--rot', rot);
-
-            debris.style.animation = `crumble-fly 0.7s ease-out forwards`;
-
-            document.body.appendChild(debris);
-
-            setTimeout(() => debris.remove(), 700);
+        // Delega a explosão para o sistema de efeitos (que usa Object Pooling)
+        if (this.effects) {
+            this.effects.spawnExplosion(rect, colorClass);
         }
     }
 
@@ -1557,15 +1713,22 @@ export class Game {
         flyer.style.position = 'fixed';
         flyer.style.zIndex = '9999';
         flyer.style.pointerEvents = 'none';
-        flyer.style.transition = 'all 0.7s cubic-bezier(0.19, 1, 0.22, 1)';
+        // MUDANÇA AQUI: Mais lento (1.2s) e curva mais "pesada" (começa lento, acelera)
+        flyer.style.transition = 'all 1.2s cubic-bezier(0.25, 0.1, 0.25, 1.0)';
         flyer.style.transformOrigin = 'center';
         
         flyer.innerText = emoji;
+        
+        // MUDANÇA AQUI: Começa bem maior
+        flyer.style.transform = 'scale(1.5)';
         
         flyer.style.left = `${startRect.left + startRect.width/4}px`; 
         flyer.style.top = `${startRect.top + startRect.height/4}px`;
         
         document.body.appendChild(flyer);
+
+        // Força o reflow para garantir que a posição inicial seja renderizada
+        flyer.getBoundingClientRect();
 
         requestAnimationFrame(() => {
             const destX = targetRect.left + targetRect.width/2 - 20; 
@@ -1573,15 +1736,17 @@ export class Game {
 
             flyer.style.left = `${destX}px`;
             flyer.style.top = `${destY}px`;
-            flyer.style.transform = 'scale(0.5)'; 
+            // MUDANÇA AQUI: Termina um pouco maior que antes (0.8 em vez de 0.5)
+            flyer.style.transform = 'scale(0.8)'; 
         });
 
+        // Tempo sincronizado com a nova duração da transição (1200ms)
         setTimeout(() => {
             flyer.remove();
             targetEl.classList.remove('target-pop'); 
             void targetEl.offsetWidth; 
             targetEl.classList.add('target-pop'); 
-        }, 700); 
+        }, 1200); 
     }
 
     renderGrid() {
@@ -1626,36 +1791,37 @@ export class Game {
         if(!this.dockEl) return;
         this.dockEl.innerHTML = '';
         
-        // Verifica configurações da fase atual
         const config = this.currentLevelConfig;
         const customItems = (this.currentMode === 'adventure' && config) ? config.items : null;
         
-        // Ativa pesos de RPG apenas se for BOSS ou BÔNUS
-        // Fases normais (coleta) terão chances equilibradas
         const isBoss = config && config.type === 'boss';
         const isBonus = config && config.type === 'bonus';
         const useRPGStats = isBoss || isBonus;
 
         let forceEasy = false;
-        if (isBonus) {
-            let emptySlots = 0;
-            this.grid.forEach(r => r.forEach(c => { if(!c) emptySlots++ }));
-            if (emptySlots > 30) forceEasy = true; 
-        }
+        
+        // 1. CONTAGEM DE ESPAÇOS VAZIOS (Smart RNG)
+        let emptyCount = 0;
+        this.grid.forEach(r => r.forEach(c => { if(!c) emptyCount++; }));
+        
+        // Se tiver menos de 15 blocos livres (aprox 20%), ativa modo de emergência
+        const isEmergency = emptyCount < 15;
+
+        if (isBonus && emptyCount > 30) forceEasy = true; 
 
         this.currentHand = [];
         for(let i=0; i<3; i++) {
-            // Passamos o useRPGStats para a função
-            const piece = getRandomPiece(customItems, useRPGStats);
-            
-            if (forceEasy && piece.matrix.flat().filter(x=>x).length > 4) {
-                 this.currentHand.push(getRandomPiece(customItems, useRPGStats)); 
-            } else {
-                 this.currentHand.push(piece);
-            }
+            // Garante peça pequena se for emergência E for a primeira peça da mão
+            const forceSimple = (isEmergency && i === 0) || (forceEasy && i === 0);
+
+            const piece = getRandomPiece(customItems, useRPGStats, forceSimple);
+            this.currentHand.push(piece);
         }
         
         this.renderDock(); 
+
+        // SALVA O ESTADO ASSIM QUE AS NOVAS PEÇAS NASCEM
+        this.saveGameState();
 
         setTimeout(() => { if (!this.checkMovesAvailable()) this.gameOver(); }, 100);
     }
@@ -1785,24 +1951,24 @@ export class Game {
                     }
                 } catch(e) { console.error(e); }
 
-                // --- 🔴 NOVA LÓGICA DO BOSS AQUI ---
-                // Verifica se o Boss deve usar uma habilidade especial (Magmor, Pyra, Ignis)
-                // Executa APÓS verificar linhas e dano, mas ANTES de verificar Game Over
                 if (this.bossState.active && !hasWon) {
                     const bossId = this.currentLevelConfig.boss?.id;
                     
-                    // Importante: BOSS_LOGIC deve estar importado no topo do arquivo
                     if (BOSS_LOGIC && BOSS_LOGIC[bossId] && BOSS_LOGIC[bossId].onTurnEnd) {
                         BOSS_LOGIC[bossId].onTurnEnd(this);
                     }
                 }
-                // -----------------------------------
 
                 if (!hasWon) {
                     const remainingPieces = this.dockEl.querySelectorAll('.draggable-piece');
+                    
+                    // Se acabaram as peças, gera novas (o save ocorrerá dentro do spawnNewHand)
                     if (remainingPieces.length === 0) {
                         this.spawnNewHand();
                     } else {
+                        // Se ainda tem peças, SALVA O ESTADO ATUAL (Tabuleiro atualizado + Peça removida da mão)
+                        this.saveGameState();
+
                         if (!this.checkMovesAvailable()) this.gameOver();
                     }
                 }
@@ -2019,17 +2185,12 @@ export class Game {
                     const targetR = r + i;
                     const targetC = c + j;
                     
-                    // Atualiza a lógica do Grid
                     this.grid[targetR][targetC] = cellData;
                     
-                    // Atualiza o Visual Imediatamente
                     const cellEl = this.boardEl.children[targetR * 8 + targetC];
                     cellEl.classList.add('filled');
                     this.applyColorClass(cellEl, cellData);
                     
-                    // 🔴 CORREÇÃO AQUI:
-                    // Antes estava apenas: cellEl.innerText = cellData.emoji;
-                    // Agora usamos o Mapa de Emojis como garantia:
                     if (cellData.type === 'ITEM') {
                         const emoji = cellData.emoji || EMOJI_MAP[cellData.key] || '?';
                         cellEl.innerText = emoji;
@@ -2046,7 +2207,7 @@ export class Game {
         const rowsToClear = [];
         const colsToClear = [];
 
-        // 1. Detecta
+        // 1. Identifica o que precisa ser limpo
         for (let r = 0; r < this.gridSize; r++) { if (this.grid[r].every(val => val !== null)) rowsToClear.push(r); }
         for (let c = 0; c < this.gridSize; c++) {
             let full = true;
@@ -2054,28 +2215,75 @@ export class Game {
             if (full) colsToClear.push(c);
         }
 
-        // 2. Visual
-        const cellsToExplode = [];
-        rowsToClear.forEach(r => { for(let c=0; c<this.gridSize; c++) cellsToExplode.push({r, c}); });
-        colsToClear.forEach(c => { for(let r=0; r<this.gridSize; r++) cellsToExplode.push({r, c}); });
+        // 2. CAPTURA VISUAL (O "Pulo do Gato" AAA)
+        // Antes de apagar os dados, criamos clones visuais dos elementos que vão sumir.
+        const visualExplosions = [];
+        const uniquePos = new Set(); // Evita duplicatas em cruzamentos de linha/coluna
 
-        cellsToExplode.forEach(pos => {
-            const idx = pos.r * 8 + pos.c;
+        const addVisual = (r, c) => {
+            const key = `${r},${c}`;
+            if (uniquePos.has(key)) return;
+            uniquePos.add(key);
+
+            const idx = r * 8 + c;
             const cell = this.boardEl.children[idx];
+            
+            // Só clona se tiver algo visível lá
             if (cell && (cell.classList.contains('filled') || cell.classList.contains('lava'))) {
-                const colorClass = Array.from(cell.classList).find(cls => cls.startsWith('type-') || cls === 'lava') || 'type-normal';
                 const rect = cell.getBoundingClientRect();
-                this.spawnExplosion(rect, colorClass);
-            }
-        });
+                const clone = cell.cloneNode(true);
+                
+                // Configura o clone para ser "fixed" (solto na tela)
+                clone.classList.add('cell-explosion'); // Classe CSS que vamos criar
+                clone.style.position = 'fixed';
+                clone.style.left = `${rect.left}px`;
+                clone.style.top = `${rect.top}px`;
+                clone.style.width = `${rect.width}px`;
+                clone.style.height = `${rect.height}px`;
+                clone.style.margin = '0';
+                clone.style.zIndex = '9999';
+                clone.style.pointerEvents = 'none'; // Não interfere no clique
+                clone.style.transition = 'none';    // Reseta transições antigas
+                clone.style.transform = 'none';
 
-        // 3. Limpa
+                // Guarda a cor para as partículas
+                const colorClass = Array.from(cell.classList).find(cls => cls.startsWith('type-') || cls === 'lava') || 'type-normal';
+                
+                visualExplosions.push({ clone, rect, colorClass });
+            }
+        };
+
+        rowsToClear.forEach(r => { for(let c=0; c<this.gridSize; c++) addVisual(r, c); });
+        colsToClear.forEach(c => { for(let r=0; r<this.gridSize; r++) addVisual(r, c); });
+
+        // 3. LIMPEZA LÓGICA (Acontece instantaneamente)
         rowsToClear.forEach(r => { if(this.clearRow(r)) damageDealt = true; linesCleared++; });
         colsToClear.forEach(c => { if(this.clearCol(c)) damageDealt = true; linesCleared++; });
 
-        // 4. Combo e Poderes
         if (linesCleared > 0) {
+            // Atualiza o grid real para vazio (os clones estarão por cima tapando o buraco)
             this.renderGrid(); 
+
+            // 4. EXECUÇÃO DA ANIMAÇÃO (Com delay em cascata)
+            visualExplosions.forEach((item, i) => {
+                // Delay de 20ms entre cada bloco cria o efeito "WAVE" satisfatório
+                setTimeout(() => {
+                    document.body.appendChild(item.clone);
+                    
+                    // Força o navegador a reconhecer o elemento antes de animar
+                    requestAnimationFrame(() => {
+                        item.clone.classList.add('explode');
+                        // Solta as partículas sincronizadas com o estouro do clone
+                        this.spawnExplosion(item.rect, item.colorClass);
+                    });
+
+                    // Remove o clone do DOM depois que a animação acaba
+                    setTimeout(() => item.clone.remove(), 400);
+
+                }, i * 20); 
+            });
+
+            // Lógica de Score e Combos (Mantida igual)
             const now = Date.now();
             if (now - (this.comboState.lastClearTime || 0) <= 5000) this.comboState.count++;
             else this.comboState.count = 1;
@@ -2085,73 +2293,43 @@ export class Game {
 
             if (this.currentMode === 'adventure' && this.heroState) {
                 let unlockedSomething = false;
-
-                // Thalion: Combo x2 
-                if (comboCount >= 2) {
-                    if (!this.heroState.thalion.unlocked || this.heroState.thalion.used) {
-                        this.heroState.thalion.unlocked = true;
-                        this.heroState.thalion.used = false; 
-                        this.effects.showFloatingTextCentered(this.i18n.t('game.hero_thalion_ready'), "feedback-gold");
-                        unlockedSomething = true;
-                    }
+                
+                // (Lógica de desbloqueio de heróis mantida...)
+                if (comboCount >= 2 && (!this.heroState.thalion.unlocked || this.heroState.thalion.used)) {
+                    this.heroState.thalion.unlocked = true; this.heroState.thalion.used = false;
+                    this.effects.showFloatingTextCentered(this.i18n.t('game.hero_thalion_ready'), "feedback-gold");
+                    unlockedSomething = true;
+                }
+                if (comboCount >= 3 && (!this.heroState.nyx.unlocked || this.heroState.nyx.used)) {
+                    this.heroState.nyx.unlocked = true; this.heroState.nyx.used = false;
+                    this.effects.showFloatingTextCentered(this.i18n.t('game.hero_nyx_ready'), "feedback-epic");
+                    unlockedSomething = true;
                 }
                 
-                // Nyx: Combo x3 
-                if (comboCount >= 3) {
-                    if (!this.heroState.nyx.unlocked || this.heroState.nyx.used) {
-                        this.heroState.nyx.unlocked = true;
-                        this.heroState.nyx.used = false; 
-                        this.effects.showFloatingTextCentered(this.i18n.t('game.hero_nyx_ready'), "feedback-epic");
-                        unlockedSomething = true;
-                    }
-                }
-                
-                // PLAYER: Combo x4 OU 5 Linhas acumuladas
+                // Player e Mage logic...
                 this.heroState.player.lineCounter = (this.heroState.player.lineCounter || 0) + linesCleared;
-                
-                const playerLinesCond = this.heroState.player.lineCounter >= 5;
-                const comboCond = comboCount >= 4;
-
-                if (playerLinesCond || comboCond) {
-                     if (playerLinesCond) {
-                         this.heroState.player.lineCounter = 0; 
-                     }
-
-                     if (!this.heroState.player.unlocked || this.heroState.player.used) {
-                        this.heroState.player.unlocked = true;
-                        this.heroState.player.used = false; 
-                        this.effects.showFloatingTextCentered(this.i18n.t('game.hero_player_ready'), "feedback-epic");
-                        unlockedSomething = true;
-                    }
+                if ((this.heroState.player.lineCounter >= 5 || comboCount >= 4) && (!this.heroState.player.unlocked || this.heroState.player.used)) {
+                    if(this.heroState.player.lineCounter >= 5) this.heroState.player.lineCounter = 0;
+                    this.heroState.player.unlocked = true; this.heroState.player.used = false;
+                    this.effects.showFloatingTextCentered(this.i18n.t('game.hero_player_ready'), "feedback-epic");
+                    unlockedSomething = true;
                 }
-                
-                // MAGA: Combo x4 OU 5 Linhas acumuladas
-                this.heroState.mage.lineCounter = (this.heroState.mage.lineCounter || 0) + linesCleared;
-                const mageLinesCond = this.heroState.mage.lineCounter >= 5;
 
-                if (mageLinesCond || comboCond) {
-                    if (mageLinesCond) {
-                        this.heroState.mage.lineCounter = 0;
-                    }
-                     
-                    if (!this.heroState.mage.unlocked || this.heroState.mage.used) {
-                        this.heroState.mage.unlocked = true;
-                        this.heroState.mage.used = false;
-                        
-                        // Mostra feedback se o Player não tiver mostrado (para não sobrepor textos)
-                        if (!unlockedSomething) {
-                            this.effects.showFloatingTextCentered(this.i18n.t('game.hero_mage_ready'), "feedback-gold");
-                        }
-                        unlockedSomething = true;
-                    }
+                this.heroState.mage.lineCounter = (this.heroState.mage.lineCounter || 0) + linesCleared;
+                if ((this.heroState.mage.lineCounter >= 5 || comboCount >= 4) && (!this.heroState.mage.unlocked || this.heroState.mage.used)) {
+                    if(this.heroState.mage.lineCounter >= 5) this.heroState.mage.lineCounter = 0;
+                    this.heroState.mage.unlocked = true; this.heroState.mage.used = false;
+                    if(!unlockedSomething) this.effects.showFloatingTextCentered(this.i18n.t('game.hero_mage_ready'), "feedback-gold");
+                    unlockedSomething = true;
                 }
 
                 if (unlockedSomething) {
                     this.updateControlsVisuals();
-                    if(this.audio) this.audio.playTone(600, 'sine', 0.2); 
+                    if(this.audio) this.audio.playTone(600, 'sine', 0.2);
                 }
             }
 
+            // Sons e Feedbacks
             if (this.bossState.active) {
                 this.effects.showComboFeedback(linesCleared, comboCount, 'normal'); 
                 if(this.audio) this.audio.playBossClear(linesCleared);
@@ -2159,10 +2337,7 @@ export class Game {
                 let soundToPlay = null; let textType = 'normal';
                 if (comboCount === 1) {
                     textType = 'normal';
-                    if (linesCleared === 1) soundToPlay = 'clear1';
-                    else if (linesCleared === 2) soundToPlay = 'clear2';
-                    else if (linesCleared === 3) soundToPlay = 'clear3';
-                    else soundToPlay = 'clear4';
+                    soundToPlay = linesCleared === 1 ? 'clear1' : linesCleared === 2 ? 'clear2' : linesCleared === 3 ? 'clear3' : 'clear4';
                 } else if (comboCount === 2) { textType = 'wow'; soundToPlay = 'wow'; }
                 else if (comboCount === 3) { textType = 'holycow'; soundToPlay = 'holycow'; }
                 else { textType = 'unreal'; soundToPlay = 'unreal'; }
@@ -2176,8 +2351,12 @@ export class Game {
             }
             this.score += (linesCleared * 10 * linesCleared) * comboCount; 
         }
+        
         return damageDealt;
     }
+	
+	
+
 
     clearRow(r) {
         let foundDamage = false;
@@ -2327,7 +2506,9 @@ export class Game {
     }
 
     gameWon(collectedGoals = {}, earnedRewards = []) {
-        // 1. Áudio e Vibração
+        // Limpa o save game pois a fase acabou
+        this.clearSavedGame();
+
         if(this.audio) { 
             this.audio.stopMusic();
             this.audio.playClear(3); 
@@ -2335,18 +2516,15 @@ export class Game {
             this.audio.vibrate([100, 50, 100, 50, 200]); 
         }
         
-        // 2. Captura elementos
         const modal = document.getElementById('modal-victory');
         const goalsGrid = document.getElementById('victory-goals-grid');
         const rewardsGrid = document.getElementById('victory-rewards-grid');
         const rewardsSection = document.getElementById('victory-rewards-section');
         const scoreEl = document.getElementById('score-victory');
 
-        // 3. Renderização Visual
         goalsGrid.innerHTML = '';
         if(rewardsGrid) rewardsGrid.innerHTML = '';
 
-        // Boss ou Fase Normal
         if (Object.keys(collectedGoals).length === 0 && this.bossState.active) {
              const bossData = this.currentLevelConfig.boss || { emoji: '💀' };
              goalsGrid.innerHTML = `
@@ -2366,7 +2544,6 @@ export class Game {
             });
         }
 
-        // Recompensas
         if (earnedRewards && earnedRewards.length > 0 && rewardsSection) {
             rewardsSection.classList.remove('hidden');
             earnedRewards.forEach(item => {
@@ -2383,21 +2560,18 @@ export class Game {
 
         if(scoreEl) scoreEl.innerText = this.score;
 
-        // 4. Salvar Progresso
         let nextLevelId = 0;
         if (this.currentMode === 'adventure' && this.currentLevelConfig) {
             nextLevelId = this.currentLevelConfig.id + 1;
             this.saveProgress(nextLevelId);
         }
 
-        // 5. LÓGICA DE NAVEGAÇÃO
         const currentWorld = WORLDS.find(w => w.levels.some(l => l.id === this.currentLevelConfig.id));
         let nextLevelConfig = null;
         if (currentWorld) {
             nextLevelConfig = currentWorld.levels.find(l => l.id === nextLevelId);
         }
 
-        // --- Botão Continuar ---
         const btnContinue = document.getElementById('btn-next-level');
         if (btnContinue) {
             const newBtn = btnContinue.cloneNode(true);
@@ -2411,15 +2585,13 @@ export class Game {
                     document.body.className = ''; 
                     this.startAdventureLevel(nextLevelConfig);
                 } else {
-                    // Se acabou o mundo, volta pro mapa forçando a troca de tela
-                    this.showScreen(this.screenLevels); // <--- GARANTE A TROCA
+                    this.showScreen(this.screenLevels); 
                     if (currentWorld) this.openWorldMap(currentWorld);
                     else this.showWorldSelect();
                 }
             });
         }
 
-        // --- Botão Voltar (CORRIGIDO) ---
         const btnBack = document.getElementById('btn-victory-back');
         if (btnBack) {
             const newBack = btnBack.cloneNode(true);
@@ -2429,8 +2601,7 @@ export class Game {
                 if(this.audio) this.audio.playClick();
                 modal.classList.add('hidden'); 
                 
-                // AQUI ESTAVA O PROBLEMA: Precisamos trocar a tela explicitamente
-                this.showScreen(this.screenLevels); // <--- LINHA ADICIONADA
+                this.showScreen(this.screenLevels); 
                 
                 if (currentWorld) {
                     this.openWorldMap(currentWorld);
@@ -2440,28 +2611,26 @@ export class Game {
             });
         }
 
-        // 6. Exibe Modal
         modal.classList.remove('hidden');
     }
+	
     gameOver() {
+        // Limpa o save game na derrota para obrigar reinício
+        this.clearSavedGame();
+
         if(this.audio) this.audio.stopMusic();
         
-        // 1. Elementos da Tela de Derrota
         const scoreEl = document.getElementById('score-final');
         const goalsGrid = document.getElementById('fail-goals-grid');
         const rewardsSection = document.getElementById('fail-rewards-section');
         
-        // 2. Preenche Pontuação
         if(scoreEl) scoreEl.innerText = this.score;
 
-        // 3. Preenche Objetivos (Progresso até morrer)
         if(goalsGrid) {
             goalsGrid.innerHTML = '';
             
-            // Se for Boss
             if (this.bossState.active) {
                 const bossData = this.currentLevelConfig.boss;
-                // Calcula % de vida restante para mostrar quão perto foi
                 const hpPercent = Math.round((this.bossState.currentHp / this.bossState.maxHp) * 100);
                 
                 goalsGrid.innerHTML = `
@@ -2470,7 +2639,6 @@ export class Game {
                         <div class="slot-count">${hpPercent}% HP</div>
                     </div>`;
             } 
-            // Se for Coleta (Aventura/Casual)
             else if (this.currentGoals) {
                 Object.keys(this.currentGoals).forEach(key => {
                     const current = this.collected[key] || 0;
@@ -2486,15 +2654,10 @@ export class Game {
             }
         }
 
-        // 4. Preenche Recompensas (XP Parcial - Futuro)
-        // Por enquanto, escondemos ou mostramos vazio
         if(rewardsSection) {
-            // Exemplo: Ganhar 10 XP mesmo perdendo
-            // rewardsSection.classList.remove('hidden'); 
-            rewardsSection.classList.add('hidden'); // Oculto por enquanto
+            rewardsSection.classList.add('hidden'); 
         }
         
-        // 5. Mostra Modal
         if(this.modalOver) this.modalOver.classList.remove('hidden');
     }
 }

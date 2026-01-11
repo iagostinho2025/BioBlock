@@ -44,39 +44,14 @@
         "tag_new": "Novo",
         "blitz_coming_soon": "Modo Blitz: Em breve! ⚡"
     },
-    "story": {
-        "title": "O Chamado",
-        "line1": "Você... pode nos ouvir?",
-        "line2": "Meu nome é <span class='highlight-name'>Thalion</span>.",
-        "p1": "Sou um jovem elfo da floresta. Esta noite, tudo o que eu conhecia foi levado de mim. Eu estava com <span class='highlight-nyx'>Nyx</span>, meu companheiro lobo, treinando entre as árvores quando o vento mudou.",
-        "p2": "Nyx sentiu o perigo antes de qualquer som… e correu. Quando chegamos perto da vila, nos escondemos. Foi então que vimos o <span class='highlight-dark'>Mago Negro</span>.",
-        "p3": "Uma fumaça escura cobriu tudo. Minha família. Meus amigos. Todos desapareceram. Quando a fumaça sumiu… não havia ninguém.",
-        "p4": "O mago partiu em direção ao seu castelo, além dos mundos que separam este lugar do fim. Eu sou jovem demais para enfrentá-lo sozinho.",
-        "highlight": "Mas você… você carrega uma espada.<br>Se caminhar ao nosso lado, podemos alcançar o Castelo Sombrio.",
-        "footer": "Nossa jornada começa agora.<br>👉 Você nos ajudará?",
-        "btn_start": "🗡️ Começar Aventura"
+    "story_slides": {
+        "1": "Meu nome é Thalion. Sou um elfo da floresta.",
+        "2": "Esta noite, tudo mudou. O Mago Negro atacou nossa vila.",
+        "3": "Minha família... meus amigos... todos levados pela fumaça escura.",
+        "4": "Eu e Nyx, meu lobo, tentamos lutar, mas somos jovens demais.",
+        "5": "Precisamos de um Campeão para alcançar o Castelo Sombrio.",
+        "6": "Você... carrega o poder que precisamos. Qual caminho você escolherá?"
     },
-	
-	"story": {
-        "title": "O Chamado",
-        "intro_line1": "Você... pode nos ouvir?",
-        "intro_line2": "A escuridão caiu sobre nós.",
-        "intro_p1": "O Mago Negro levou tudo. Minha vila, meu povo... restamos apenas eu e Nyx.",
-        "intro_p2": "Precisamos de um campeão. Alguém capaz de quebrar as correntes do destino.",
-        
-        "choose_title": "QUEM É VOCÊ?",
-        "warrior_name": "Guerreiro de Ferro",
-        "warrior_desc": "Força bruta. Especialista em quebrar defesas e abrir caminhos com sua espada flamejante.",
-        "mage_name": "Maga da Luz",
-        "mage_desc": "Sabedoria antiga. Controla a luz divina para purificar áreas e obliterar as trevas.",
-        
-        "reply_warrior": "Uma espada de fogo... As lendas diziam que um guerreiro viria do oeste. Sua força será nosso escudo.",
-        "reply_mage": "Essa luz... Faz séculos que não vejo tal pureza. Sua magia será nossa lanterna na escuridão.",
-        
-        "final_call": "O caminho para o Castelo Sombrio está bloqueado pelo Guardião de Pedra.",
-        "btn_fight": "⚔️ Enfrentar Guardião"
-    },
-	
     "worlds": {
         "map_title": "Mapa dos Mundos",
         "tutorial": "O Portão",
@@ -133,5 +108,35 @@
         "wow": "UAU!",
         "holycow": "CARAMBA!!",
         "unreal": "IRREAL!!!"
+    },
+    "hero_select": {
+        "title": "Escolha seu Campeão",
+        "subtitle": "Quem irá liderar o ataque contra as sombras?"
+    },
+    "heroes": {
+        "warrior_name": "O Guerreiro",
+        "warrior_desc": "Portador de uma espada encantada com fogo antigo. Ele realiza dois golpes sequenciais, atingindo a coluna alvo e a vizinha.",
+        "warrior_skill": "Lâmina de Fogo",
+        "warrior_effect": "Corte Duplo Vertical (6 Blocos)",
+        "mage_name": "A Maga",
+        "mage_desc": "Guardiã da luz ancestral. Ela invoca uma magia que purifica uma área larga, atingindo o centro e as laterais.",
+        "mage_skill": "Luz Divina",
+        "mage_effect": "Área Retangular (3x2)",
+        "label_skill": "Habilidade Especial:",
+        "tag_damage": "⚔️ Dano Bruto",
+        "tag_easy": "⭐ Fácil",
+        "tag_control": "✨ Controle",
+        "tag_tactical": "⭐ Tático" 
+    },
+    "story_nav": {
+        "skip": "Pular",
+        "next": "Continuar"
+    },
+	"hero_loading": {
+        "warrior_1": "Equipando armadura...",
+        "warrior_2": "Afiando lâmina...",
+        "mage_1": "Abrindo grimório...",
+        "mage_2": "Canalizando mana...",
+        "common": "Entrando no Portão..."
     }
 }

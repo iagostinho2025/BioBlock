@@ -5180,123 +5180,260 @@ input:checked + .slider:before { transform: translateX(22px); }
     margin-top: 30px;
 }
 
-/* =========================================
-   SELEÇÃO DE HERÓI (CINEMÁTICA)
-   ========================================= */
+/* --- ANIMAÇÕES AAA DE DESTRUIÇÃO --- */
+
+/* O Clone começa normal e explode */
+.cell-explosion {
+    will-change: transform, opacity, filter;
+    /* Sombras ajudam a separar do fundo */
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.5); 
+    border-radius: 6px; /* Garante que mantém o visual arredondado */
+}
+
+.cell-explosion.explode {
+    /* Cubic-bezier(0.22, 1, 0.36, 1) cria um efeito "explosivo" rápido no início 
+       e suave no final, muito usado em UI design moderno.
+    */
+    animation: block-explode 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes block-explode {
+    0% {
+        transform: scale(1);
+        filter: brightness(1);
+        opacity: 1;
+    }
+    15% {
+        /* IMPACTO: Cresce muito rápido, fica branco puro e gira um pouco */
+        transform: scale(1.3) rotate(5deg);
+        filter: brightness(10) contrast(2); /* Flash de luz */
+        box-shadow: 0 0 20px rgba(255, 255, 255, 0.8); /* Glow externo */
+    }
+    100% {
+        /* IMPLOSÃO: Encolhe e some */
+        transform: scale(0) rotate(-10deg);
+        filter: brightness(0);
+        opacity: 0;
+    }
+}
+
+/* --- TELA DE HISTÓRIA (Cinemática) --- */
+.story-overlay {
+    background: rgba(0, 0, 0, 0.75); /* Escurece o fundo para ler o texto */
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end; /* Texto embaixo */
+    padding-bottom: 80px;
+    box-sizing: border-box;
+}
+
+.story-container {
+    padding: 20px;
+    max-width: 600px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.story-text-typing {
+    font-family: 'Poppins', sans-serif;
+    font-size: 1.2rem;
+    color: #fff;
+    line-height: 1.6;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+    min-height: 80px; /* Evita pulos */
+    margin-bottom: 30px;
+}
+
+.story-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+
+/* --- TELA DE SELEÇÃO DE HERÓI (OTIMIZADA MOBILE) --- */
 .hero-select-layout {
-    background: url('../img/bg_story.png') no-repeat center center;
-    background-size: cover;
+    background: radial-gradient(circle at center, #1e293b, #0f172a);
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    position: relative;
+    padding: 10px; /* Menos padding na borda */
+    overflow-y: auto;
 }
 
-/* Camada escura para o texto ler melhor */
-.hero-select-layout::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    z-index: 1;
+.hero-select-header {
+    text-align: center;
+    margin-bottom: 20px;
+    margin-top: 10px;
 }
 
 .hero-select-title {
-    position: relative;
-    z-index: 2;
-    color: #fff;
-    font-size: 2rem;
-    margin-bottom: 30px;
-    text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
-    letter-spacing: 2px;
+    font-size: 1.5rem; /* Título um pouco menor */
+    color: #fbbf24;
+    text-shadow: 0 0 20px rgba(251, 191, 36, 0.3);
+    margin-bottom: 5px;
+}
+
+.hero-select-subtitle {
+    color: #94a3b8;
+    font-size: 0.9rem;
 }
 
 .heroes-container {
-    position: relative;
-    z-index: 2;
     display: flex;
-    gap: 20px;
-    width: 100%;
-    max-width: 600px;
-    padding: 0 20px;
+    flex-direction: row; /* Força linha horizontal */
+    flex-wrap: nowrap;   /* Impede que caia para a linha de baixo */
+    gap: 10px;           /* Espaço menor entre os cards */
     justify-content: center;
+    width: 100%;
+    max-width: 800px;
+    align-items: stretch; /* Faz os cards terem a mesma altura */
 }
 
 .hero-card {
-    flex: 1;
-    background: rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
+    background: #1e293b;
+    border: 2px solid #334155;
+    border-radius: 12px;
     overflow: hidden;
+    width: 48%; /* Ocupa quase metade da tela cada um */
+    min-width: 0; /* Permite encolher se necessário */
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    transition: all 0.2s ease;
     position: relative;
-    max-width: 200px; /* Limita largura no mobile */
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    display: flex;
+    flex-direction: column;
 }
 
-.hero-card:hover {
-    transform: translateY(-10px) scale(1.02);
-    border-color: rgba(255, 255, 255, 0.4);
-    box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+/* Efeito de seleção ativo */
+.hero-card:active {
+    transform: scale(0.98);
 }
 
+/* Aumentamos a altura do container da imagem */
 .card-visual {
+    height: 220px; /* <-- MUDANÇA PRINCIPAL: De 140px para 220px */
     position: relative;
-    height: 250px;
+    background: #0f172a;
+    display: flex;
+    align-items: flex-end; /* Garante que os pés fiquem na base */
+    justify-content: center;
     overflow: hidden;
 }
 
+/* Ajuste fino na imagem para ela preencher bem o novo espaço */
 .card-visual img {
+    max-height: 100%; /* <-- ALTERADO: Respeita o limite de altura */
+    max-width: 100%;  /* <-- AJUSTE: Garante que não estoure a largura */
+    object-fit: contain; /* <-- IMPORTANTE: Mostra a imagem inteira sem cortes */
+    z-index: 2;
+    transform: none;
+    margin-bottom: 0; /* Garante que fique na base se sobrar espaço */
+}
+
+.card-glow {
+    position: absolute;
     width: 100%;
     height: 100%;
-    object-fit: cover;
-    transition: transform 0.5s;
+    top: 0; left: 0;
+    z-index: 1;
+    opacity: 0.3;
 }
 
-.hero-card:hover .card-visual img {
-    transform: scale(1.1);
-}
+.glow-fire { background: radial-gradient(circle at bottom, #ef4444, transparent 70%); }
+.glow-magic { background: radial-gradient(circle at bottom, #8b5cf6, transparent 70%); }
 
 .card-info {
-    padding: 15px;
-    text-align: center;
-    color: #fff;
-    background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
-    position: absolute;
-    bottom: 0;
-    width: 100%;
+    padding: 12px; /* Padding reduzido */
+    text-align: left;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 .card-info h3 {
-    margin: 0 0 5px 0;
-    font-size: 1.1rem;
-    color: #fbbf24;
+    font-size: 1.1rem; /* Fonte menor */
+    color: #fff;
+    margin-bottom: 8px;
+    white-space: nowrap; /* Não quebra linha no nome */
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.card-info p {
-    font-size: 0.8rem;
+.card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 10px;
+}
+
+.tag-power, .tag-difficulty {
+    font-size: 0.6rem; /* Tags bem pequenas */
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.tag-power { background: rgba(255,255,255,0.1); color: #fbbf24; }
+.tag-difficulty { background: rgba(255,255,255,0.1); color: #94a3b8; }
+
+.hero-desc {
     color: #cbd5e1;
-    line-height: 1.3;
+    font-size: 0.75rem;
+    line-height: 1.4; /* Um pouco mais de respiro entre as linhas */
+    margin-bottom: 12px;
+    display: -webkit-box;
+    -webkit-line-clamp: 6; /* <-- AUMENTADO: Permite até 6 linhas de texto antes de cortar */
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 3.6em; /* Garante uma altura mínima para alinhar os cards se o texto for curto */
 }
 
-/* Efeitos de Brilho Específicos */
-.glow-fire {
-    box-shadow: inset 0 -20px 50px rgba(239, 68, 68, 0.5);
-}
-.glow-light {
-    box-shadow: inset 0 -20px 50px rgba(34, 211, 238, 0.5);
-}
-
-/* Ao selecionar */
-.hero-card.selected {
-    border: 2px solid #fbbf24;
-    box-shadow: 0 0 30px rgba(251, 191, 36, 0.6);
+.hero-skill-preview {
+    background: rgba(0,0,0,0.3);
+    padding: 8px;
+    border-radius: 6px;
+    border-left: 2px solid #fbbf24;
+    margin-top: auto; /* Empurra para o final do card */
 }
 
-/* Responsivo para telas pequenas */
-@media (max-height: 700px) {
-    .card-visual { height: 180px; }
-    .hero-select-title { font-size: 1.5rem; margin-bottom: 15px; }
+.hero-skill-preview small {
+    display: block;
+    color: #64748b;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+}
+
+.hero-skill-preview strong {
+    display: block;
+    color: #fff;
+    font-size: 0.85rem;
+    margin: 2px 0;
+}
+
+.hero-skill-preview span {
+    font-size: 0.7rem;
+    color: #94a3b8;
+}
+
+/* --- Estilos da Imagem de História --- */
+
+.story-image-box {
+    height: 400px; /* Altura fixa para evitar que o layout pule na troca de imagens */
+    display: flex;
+    align-items: flex-end; /* Alinha a base da imagem com o texto */
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+#story-reaction-img {
+    max-height: 100%;
+    max-width: 100%;
+    /* Uma borda sutil e sombra para destacar do fundo */
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5)); 
+    /* Transição suave para o efeito de fade */
+    transition: opacity 0.3s ease-in-out;
 }

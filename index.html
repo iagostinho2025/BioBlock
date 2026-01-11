@@ -131,48 +131,71 @@
             <div class="levels-grid" id="levels-container"></div>
         </div>
 
-        <div id="screen-story" class="screen hidden">
-            <div class="story-content">
-                
-                <div class="story-visual">
-                    <div class="story-image-placeholder">
-                        </div>
-                </div>
+        <div id="screen-story" class="screen hidden" style="background-image: url('assets/img/bg_story.png'); background-size: cover; background-position: center;">
+            <div class="story-overlay">
+                <div class="story-container">
+                    <div class="story-image-box">
+                        <img id="story-reaction-img" src="" alt="Thalion" style="opacity: 0;">
+                    </div>
 
-                <div class="story-text-container">
-                    <h2 class="story-title" data-i18n="story.title">O Chamado</h2>
-                    <p class="story-line" data-i18n="story.line1">Você… pode nos ouvir?</p>
+                    <div id="story-slides">
+                        <p id="story-text" class="story-text-typing"></p>
+                    </div>
+                    
+                    <div class="story-controls">
+                        <button id="btn-skip-story" class="btn-text-only" data-i18n="story_nav.skip">Pular</button>
+                        <button id="btn-next-slide" class="btn-epic">
+                            <span data-i18n="story_nav.next">Continuar</span> ➜
+                        </button>
+                    </div>
                 </div>
-
-                <button id="btn-start-adventure" class="btn-epic hidden" data-i18n="story.btn_start">
-                    🗡️ Começar Aventura
-                </button>
             </div>
         </div>
 
         <div id="screen-hero-select" class="screen hidden hero-select-layout">
-            <h2 class="hero-select-title" data-i18n="story.choose_title">QUEM É VOCÊ?</h2>
-            
+            <header class="hero-select-header">
+                <h2 class="hero-select-title" data-i18n="hero_select.title">Escolha seu Campeão</h2>
+                <p class="hero-select-subtitle" data-i18n="hero_select.subtitle">Quem irá liderar o ataque contra as sombras?</p>
+            </header>
+
             <div class="heroes-container">
-                <div class="hero-card" id="card-warrior">
+                <div class="hero-card" id="card-warrior" onclick="window.gameInstance.selectHero('warrior')">
                     <div class="card-visual">
-                        <img src="assets/img/card_warrior.png" alt="Guerreiro">
+                        <img src="assets/img/card_warrior.png" alt="Warrior">
                         <div class="card-glow glow-fire"></div>
                     </div>
                     <div class="card-info">
-                        <h3 data-i18n="story.warrior_name">Guerreiro</h3>
-                        <p data-i18n="story.warrior_desc">Força bruta e espada flamejante.</p>
+                        <h3 data-i18n="heroes.warrior_name">O Guerreiro</h3>
+                        <div class="card-tags">
+                            <span class="tag-power" data-i18n="heroes.tag_damage">⚔️ Dano Bruto</span>
+                            <span class="tag-difficulty" data-i18n="heroes.tag_easy">⭐ Fácil</span>
+                        </div>
+                        <p class="hero-desc" data-i18n="heroes.warrior_desc">Descrição do guerreiro...</p>
+                        <div class="hero-skill-preview">
+                            <small data-i18n="heroes.label_skill">Habilidade Especial:</small>
+                            <strong data-i18n="heroes.warrior_skill">Lâmina de Fogo</strong>
+                            <span data-i18n="heroes.warrior_effect">Quebra 2 colunas</span>
+                        </div>
                     </div>
                 </div>
 
-                <div class="hero-card" id="card-mage">
+                <div class="hero-card" id="card-mage" onclick="window.gameInstance.selectHero('mage')">
                     <div class="card-visual">
-                        <img src="assets/img/card_mage.png" alt="Maga">
-                        <div class="card-glow glow-light"></div>
+                        <img src="assets/img/card_mage.png" alt="Mage">
+                        <div class="card-glow glow-magic"></div>
                     </div>
                     <div class="card-info">
-                        <h3 data-i18n="story.mage_name">Maga</h3>
-                        <p data-i18n="story.mage_desc">Poder divino e controle de área.</p>
+                        <h3 data-i18n="heroes.mage_name">A Maga</h3>
+                        <div class="card-tags">
+                            <span class="tag-power" data-i18n="heroes.tag_control">✨ Controle</span>
+                            <span class="tag-difficulty" data-i18n="heroes.tag_tactical">⭐ Tático</span>
+                        </div>
+                        <p class="hero-desc" data-i18n="heroes.mage_desc">Descrição da maga...</p>
+                        <div class="hero-skill-preview">
+                            <small data-i18n="heroes.label_skill">Habilidade Especial:</small>
+                            <strong data-i18n="heroes.mage_skill">Luz Divina</strong>
+                            <span data-i18n="heroes.mage_effect">Explosão em área</span>
+                        </div>
                     </div>
                 </div>
             </div>

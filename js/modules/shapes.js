@@ -1,3 +1,5 @@
+// js/modules/shapes.js
+
 // Definição das matrizes (Desenhos das peças)
 const SHAPE_DEFINITIONS = [
     { name: 'dot', matrix: [[1]] },
@@ -31,6 +33,9 @@ const SHAPE_DEFINITIONS = [
     { name: 'z-v', matrix: [[0, 1], [1, 1], [1, 0]] },
 ];
 
+// Peças de emergência (Sempre cabem em buracos pequenos)
+const SAFE_SHAPES = ['dot', 'mini-h', 'mini-v'];
+
 // TABELA MESTRA DE STATS (Dano e Raridade)
 export const ITEM_STATS = {
     // MUNDO FOGO
@@ -60,22 +65,34 @@ const DEFAULT_ITEMS = [
     { key: 'NORMAL', emoji: null, weight: 15 }
 ];
 
-export function getRandomPiece(customItems = null, useRPGStats = false) {
+/**
+ * Gera uma peça aleatória.
+ * @param {Array} customItems - Lista de itens permitidos (Aventura) ou null (Casual).
+ * @param {Boolean} useRPGStats - Se deve usar pesos de raridade/dano.
+ * @param {Boolean} forceSimple - (NOVO) Se true, força uma peça pequena (1x1 ou 2x1).
+ */
+export function getRandomPiece(customItems = null, useRPGStats = false, forceSimple = false) {
     let pool = SHAPE_DEFINITIONS;
 
-    // --- FILTRO DE TESTE (SOMENTE MODO CLÁSSICO) ---
-    // Se customItems é null, significa que estamos no Modo Casual/Clássico.
-    // Se customItems tem conteúdo, estamos no Modo Aventura.
-    if (!customItems) {
+    // 1. Filtro de Emergência (Smart RNG)
+    if (forceSimple) {
+        pool = SHAPE_DEFINITIONS.filter(s => SAFE_SHAPES.includes(s.name));
+    }
+    // 2. Filtro de Debug (Somente Modo Casual e se não for emergência)
+    else if (!customItems) {
+        // No modo clássico normal, mantemos o pool variado, 
+        // mas você pode restringir aqui se quiser testar peças específicas.
+        // Vou manter o pool completo por padrão para o modo clássico,
+        // mas descomente abaixo se quiser peças específicas de teste.
+        /*
         const DEBUG_SHAPES = [
             'square-2x2', 'square-3x3',
             'line-3h', 'line-3v',
             'line-4h', 'line-4v'
         ];
-        // Aplica o filtro APENAS no clássico
         pool = SHAPE_DEFINITIONS.filter(s => DEBUG_SHAPES.includes(s.name));
+        */
     }
-    // -----------------------------------------------
 
     const shapeDef = pool[Math.floor(Math.random() * pool.length)];
     const matrix = shapeDef.matrix;
