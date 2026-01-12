@@ -138,5 +138,9 @@
         "mage_1": "Abrindo grimório...",
         "mage_2": "Canalizando mana...",
         "common": "Entrando no Portão..."
+    },
+	"campfire": {
+        "text": "A fogueira crepita sob o luar. O caminho para o Castelo Sombrio está selado por uma magia antiga.\n\nPara prosseguir, você deve provar seu valor vencendo o **Guardião dos Mundos**.",
+        "btn_start": "🔥 Enfrentar o Guardião"
     }
 }

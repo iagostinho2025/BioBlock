@@ -37,6 +37,7 @@ export class Game {
         this.screenLevels = document.getElementById('screen-levels');
         this.screenStory = document.getElementById('screen-story'); 
         this.screenHeroSelect = document.getElementById('screen-hero-select'); // NOVO
+		this.screenCampfire = document.getElementById('screen-campfire'); // <--- ADICIONE ISSO
         this.screenGame = document.getElementById('screen-game');
         this.screenSettings = document.getElementById('screen-settings'); 
         
@@ -121,15 +122,50 @@ export class Game {
 	// --- NOVO SISTEMA DE HISTÓRIA E SELEÇÃO ---
 
     checkAdventureIntro() {
-        // Verifica se já tem classe escolhida
-        const hasClass = localStorage.getItem('blocklands_player_class');
+        // Verifica se já existe uma classe salva (Guerreiro ou Maga)
+        const savedClass = localStorage.getItem('blocklands_player_class');
         
-        if (hasClass) {
-            // Se já tem classe, assume que já viu a intro e vai pro mapa
+        if (savedClass) {
+            // Se já tem personagem, PULA TUDO e vai direto para o Mapa
             this.showWorldSelect();
         } else {
-            // Primeira vez: História -> Seleção -> Tutorial
+            // Se não tem (primeira vez ou resetou), começa a jornada
             this.playStory();
+        }
+    }
+	showCampfireScene() {
+        const screen = document.getElementById('screen-campfire');
+        const textEl = document.getElementById('campfire-text');
+        const btnTextEl = document.getElementById('campfire-btn-text');
+        
+        if (!screen) return;
+
+        const bgImage = (this.playerClass === 'warrior') 
+            ? 'assets/img/bg_campfire_warrior.webp' 
+            : 'assets/img/bg_campfire_mage.webp';
+        
+        screen.style.backgroundImage = `url('${bgImage}')`;
+
+        if (textEl) textEl.innerHTML = this.i18n.t('campfire.text').replace(/\*\*(.*?)\*\*/g, '<strong style="color:#fbbf24">$1</strong>');
+        if (btnTextEl) btnTextEl.innerText = this.i18n.t('campfire.btn_start');
+
+        this.showScreen(screen);
+        this.toggleGlobalHeader(false);
+
+        const btnStart = document.getElementById('btn-start-boss');
+        if (btnStart) {
+            const newBtn = btnStart.cloneNode(true);
+            btnStart.parentNode.replaceChild(newBtn, btnStart);
+            
+            newBtn.addEventListener('click', () => {
+                if(this.audio) {
+                    this.audio.playClick();
+                    this.audio.playTone(100, 'sawtooth', 0.5); 
+                }
+
+                // MUDANÇA AQUI: Vai para o MAPA, onde a mãozinha vai guiar
+                this.showWorldSelect(); 
+            });
         }
     }
 
@@ -171,7 +207,7 @@ export class Game {
         
         if (!textEl || !imgEl) return;
 
-        // Roteiro de Textos (Traduzidos)
+        // Roteiro de Textos
         const slidesTxt = [
             this.i18n.t('story_slides.1'),
             this.i18n.t('story_slides.2'),
@@ -181,7 +217,7 @@ export class Game {
             this.i18n.t('story_slides.6')
         ];
 
-        // Mapeamento de Imagens (Uma para cada passo, nomes definidos no Passo 0)
+        // Mapeamento de Imagens
         const slidesImg = [
             'assets/img/thalion_story_1.png',
             'assets/img/thalion_story_2.png',
@@ -192,30 +228,32 @@ export class Game {
         ];
 
         if (this.storyStep < slidesTxt.length) {
-            // 1. FADE OUT: Esconde o conteúdo atual
+            // Lógica de exibição (mantida igual)
             textEl.style.opacity = 0;
             imgEl.style.opacity = 0;
 
-            // 2. Aguarda o fade out (200ms), troca o conteúdo e faz FADE IN
             setTimeout(() => {
-                // Troca o texto
                 textEl.innerText = slidesTxt[this.storyStep];
-                
-                // Troca a imagem (se existir para este passo)
                 if (slidesImg[this.storyStep]) {
                     imgEl.src = slidesImg[this.storyStep];
                 }
-
-                // Força o navegador a renderizar a nova imagem antes de mostrar
                 requestAnimationFrame(() => {
                     textEl.style.opacity = 1;
                     imgEl.style.opacity = 1;
                 });
-            }, 200); // Tempo do fade out
+            }, 200);
 
         } else {
-            // Fim da história -> Seleção
-            this.showHeroSelection();
+            // --- MUDANÇA AQUI: O que fazer ao fim da história? ---
+            const savedClass = localStorage.getItem('blocklands_player_class');
+            
+            if (savedClass) {
+                // Se já tem classe (está apenas revendo a história), volta pro Mapa
+                this.showWorldSelect();
+            } else {
+                // Se NÃO tem classe (primeira vez), vai para a Seleção
+                this.showHeroSelection();
+            }
         }
     }
 
@@ -300,7 +338,7 @@ export class Game {
                     const tutorialWorld = WORLDS.find(w => w.id === 'tutorial_world');
                     if (tutorialWorld) {
                         const tutorialLevel = tutorialWorld.levels[0];
-                        this.startAdventureLevel(tutorialLevel);
+                        this.showCampfireScene();
                     }
 
                     // Fade out da tela de loading
@@ -398,7 +436,7 @@ export class Game {
 
     loadProgress() {
         const saved = localStorage.getItem('blocklands_progress_main');
-        return saved ? parseInt(saved) : 1; 
+        return saved ? parseInt(saved) : 0; 
     }
 
     saveProgress(levelId) {
@@ -571,7 +609,12 @@ export class Game {
         });
 
         bindClick('btn-skip-story', () => {
-            this.showHeroSelection();
+            const savedClass = localStorage.getItem('blocklands_player_class');
+            if (savedClass) {
+                this.showWorldSelect(); // Já tem herói? Mapa.
+            } else {
+                this.showHeroSelection(); // Não tem? Seleção.
+            }
         });
 
         bindClick('btn-start-adventure', () => {
@@ -583,14 +626,24 @@ export class Game {
         // Botões de Game Over / Vitória
         bindClick('btn-restart-over', () => this.retryGame());
         
-        bindClick('btn-quit-over', () => {
-            this.modalOver.classList.add('hidden');
+        bindClick('btn-quit-game', () => {
+            // Para a música ao sair
+            if(this.audio) this.audio.stopMusic();
+
             if (this.currentMode === 'adventure') {
-                this.showScreen(this.screenLevels);
+                // Identifica em qual mundo estamos baseado na fase atual
                 const currentWorld = WORLDS.find(w => w.levels.some(l => l.id === this.currentLevelConfig?.id));
-                if (currentWorld) this.openWorldMap(currentWorld);
-                else this.showWorldSelect();
+                
+                // Se achou o mundo E NÃO É O TUTORIAL (que não tem mapa interno)
+                if (currentWorld && currentWorld.id !== 'tutorial_world') {
+                    this.showScreen(this.screenLevels); // Garante que o container apareça
+                    this.openWorldMap(currentWorld);    // Abre o mapa do mundo (Fogo, Floresta, etc)
+                } else {
+                    // Se for Tutorial (Guardião) ou erro, volta para a Seleção de Mundos
+                    this.showWorldSelect();
+                }
             } else {
+                // Modo Casual: Volta para o Menu Principal
                 this.showScreen(this.screenMenu);
             }
         });
@@ -970,7 +1023,7 @@ export class Game {
         }
         
         // Adicione this.screenHeroSelect à lista de telas para esconder
-        [this.screenMenu, this.screenLevels, this.screenStory, this.screenGame, this.screenSettings, this.screenHeroSelect].forEach(s => {
+        [this.screenMenu, this.screenLevels, this.screenStory, this.screenGame, this.screenSettings, this.screenHeroSelect, this.screenCampfire].forEach(s => {
             if(s) {
                 s.classList.remove('active-screen');
                 s.classList.add('hidden');
@@ -981,7 +1034,7 @@ export class Game {
             this.toggleGlobalHeader(false); 
         } else {
             // A tela de seleção e história também escondem o header
-            if (screenEl === this.screenStory || screenEl === this.screenHeroSelect) {
+            if (screenEl === this.screenStory || screenEl === this.screenHeroSelect || screenEl === this.screenCampfire) {
                 this.toggleGlobalHeader(false);
             } else {
                 this.toggleGlobalHeader(true);
@@ -1007,15 +1060,9 @@ export class Game {
     showWorldSelect() {
         const container = document.getElementById('levels-container');
         
-        // 1. Configura o layout e APLICA A IMAGEM DIRETO (Sem CSS externo)
         if (container) {
-            container.style = ''; // Limpa tudo
-            
-            // --- CORREÇÃO DO PISCAR PRETO ---
-            // Aplicamos a imagem inline. Como ela foi pré-carregada no preloadAssets,
-            // o navegador a exibe instantaneamente do cache de memória.
+            container.style = ''; 
             container.style.backgroundImage = "url('assets/img/bg_world_select.webp')";
-            
             container.className = 'world-select-layout';
         }
 
@@ -1024,44 +1071,44 @@ export class Game {
 
         if(!container) return;
 
-        // 2. Renderiza Botões
+        // 1. INSERE OS BOTÕES PADRONIZADOS (AAA)
         container.innerHTML = `
             <div class="buttons-sticky-header">
-                <button id="btn-world-back-internal" class="btn-floating-top-left">⬅</button>
-                <button id="btn-replay-story" class="btn-floating-top-right" title="História">📜</button>
+                <button id="btn-world-back-internal" class="btn-aaa-back pos-absolute-top-left">
+                    <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                </button>
+                
+                <button id="btn-replay-story" class="btn-aaa-back" style="position: absolute; top: 20px; right: 20px;">
+                    <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                </button>
             </div>
             <div class="worlds-grid" id="worlds-grid"></div>
         `;
 
-        // Eventos
+        // 2. CONFIGURA EVENTOS (Simplificado para evitar bugs)
         const backBtn = document.getElementById('btn-world-back-internal');
         if (backBtn) {
-            // Remove listeners antigos clonando o botão (Prática segura)
-            const newBackBtn = backBtn.cloneNode(true);
-            backBtn.parentNode.replaceChild(newBackBtn, backBtn);
-            
-            newBackBtn.addEventListener('click', (e) => {
-                e.preventDefault();
+            backBtn.onclick = (e) => {
+                e.preventDefault(); // Previne comportamentos estranhos
                 if(this.audio) this.audio.playBack();
                 container.className = '';
-                container.style.backgroundImage = ''; // Limpa ao sair
+                container.style.backgroundImage = ''; 
                 this.showScreen(this.screenMenu);
-            });
+            };
         }
         
         const replayBtn = document.getElementById('btn-replay-story');
         if (replayBtn) {
-            replayBtn.addEventListener('click', () => {
+            replayBtn.onclick = () => {
                 if(this.audio) this.audio.playClick();
                 this.playStory(); 
-            });
+            };
         }
 
-        // 3. Renderiza as Ilhas
+        // 3. RENDERIZA OS MUNDOS (Código original mantido)
         const grid = document.getElementById('worlds-grid');
         const currentSave = this.loadProgress(); 
 
-        // Garante que os caminhos estão corretos (JPG)
         const worldImages = {
             'tutorial_world': 'assets/img/icon_world_tutorial.jpg',
             'fire_world':     'assets/img/icon_world_fire.jpg',
@@ -1071,15 +1118,13 @@ export class Game {
             'castle_world':   'assets/img/icon_world_castle.jpg'
         };
 
-        WORLDS.forEach((world, index) => {
+        WORLDS.forEach((world) => {
             const worldItem = document.createElement('div');
-            
             worldItem.style.position = 'absolute';
             const pos = world.worldPos || { x: 50, y: 50 };
             worldItem.style.left = pos.x + '%';
             worldItem.style.top = pos.y + '%';
             worldItem.style.transform = 'translate(-50%, -50%)';
-            
             worldItem.style.display = 'flex';
             worldItem.style.flexDirection = 'column';
             worldItem.style.alignItems = 'center';
@@ -1088,37 +1133,45 @@ export class Game {
             let firstLevelId = world.levels[0].id;
             const isLocked = currentSave < firstLevelId;
 
+            if (world.id === 'tutorial_world' && currentSave === 0) {
+                const hand = document.createElement('div');
+                hand.className = 'tutorial-hand';
+                hand.innerHTML = '👆'; 
+                worldItem.appendChild(hand);
+            }
+
             const img = document.createElement('img');
             img.src = worldImages[world.id] || 'assets/img/icon_world_fire.jpg';
             img.alt = world.name;
             img.className = 'world-card-image';
-            
-            // Aplica tamanho customizado se existir
-            if (world.worldSize) {
-                img.style.width = world.worldSize + 'px';
-            }
-
+            if (world.worldSize) img.style.width = world.worldSize + 'px';
             if (isLocked) img.classList.add('locked');
 
             img.addEventListener('click', () => {
                 if (!isLocked) {
                     if(this.audio) this.audio.playClick();
-                    this.openWorldMap(world); 
+                    if (world.id === 'tutorial_world') {
+                        this.toggleGlobalHeader(true);
+                        const container = document.getElementById('levels-container');
+                        container.style.display = 'none';
+                        document.body.className = '';
+                        this.startAdventureLevel(world.levels[0]);
+                    } else {
+                        this.openWorldMap(world); 
+                    }
                 } else {
                     if(this.audio) this.audio.vibrate(50);
-                    this.effects.showFloatingTextCentered("BLOQUEADO", "feedback-bad");
+                    this.effects.showFloatingTextCentered(this.i18n.t('worlds.locked_msg'), "feedback-bad");
                 }
             });
 
             worldItem.appendChild(img);
-
             if (isLocked) {
                 const lock = document.createElement('div');
                 lock.className = 'lock-overlay';
                 lock.innerHTML = '🔒';
                 worldItem.appendChild(lock);
             }
-
             grid.appendChild(worldItem);
         });
     }
@@ -1131,15 +1184,17 @@ export class Game {
 
         // Limpa estilos antigos para garantir tela cheia
         container.className = ''; 
-        container.style = ''; // Remove styles inline anteriores
-        container.style.display = 'block'; // Garante visibilidade
+        container.style = ''; 
+        container.style.display = 'block';
 
-        // --- NOVO HTML LIMPO (Sem título, apenas mapa e botão) ---
+        // --- ATUALIZADO: Botão AAA com Z-Index alto ---
         container.innerHTML = `
-            <button id="btn-map-back" class="floating-back-btn">⬅</button>
+            <button id="btn-map-back" class="btn-aaa-back pos-absolute-top-left" style="z-index: 2000;">
+                <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+            </button>
             
             <div id="world-map-bg" class="world-map-container full-screen-mode">
-                </div>
+            </div>
         `;
 
         // Configura a imagem de fundo
@@ -1147,7 +1202,7 @@ export class Game {
         if (worldConfig.bgImage) {
             mapBg.style.backgroundImage = `url('${worldConfig.bgImage}')`;
         } else {
-            mapBg.style.backgroundColor = '#1a0b0b'; // Cor escura caso falhe a imagem
+            mapBg.style.backgroundColor = '#1a0b0b'; 
         }
 
         // Configura o botão de voltar
@@ -1157,7 +1212,7 @@ export class Game {
                 e.stopPropagation();
                 if(this.audio) this.audio.playBack();
                 
-                // Limpa o HTML ao sair para não deixar o mapa fixo na tela
+                // Limpa o HTML ao sair
                 container.innerHTML = ''; 
                 this.showWorldSelect(); 
             });
@@ -1166,15 +1221,16 @@ export class Game {
         const currentSave = this.loadProgress();
 
         // --- FUNÇÃO AUXILIAR: BOTÕES SVG (RACHADOS) ---
-        // --- FUNÇÃO DE ESCUDOS (BÔNUS LIBERADO) ---
+        // (O resto da função openWorldMap continua exatamente igual daqui para baixo...)
+        // ... (Mantenha o código do createSvgButton e o loop forEach igual ao que você já tem)
+        
+        // --- CÓDIGO REPETIDO PARA CONTEXTO (NÃO PRECISA COPIAR SE JÁ TIVER) ---
         const createSvgButton = (levelData, isBonus = false) => {
             const pos = levelData.mapPos || { x: 50, y: 50 }; 
             const levelNum = isBonus ? '🎁' : levelData.id;
             
-            // --- 1. DETECTAR ESTADO ---
             let state = 'locked';
             if (isBonus) {
-                // ALTERAÇÃO AQUI: Bônus sempre liberado!
                 state = 'unlocked'; 
             } else {
                 if (levelData.id < currentSave) state = 'completed';
@@ -1182,9 +1238,8 @@ export class Game {
                 else state = 'locked';
             }
 
-            // --- 2. DETECTAR TIPO E ÍCONE ---
             let type = 'normal';
-            let emojiIcon = null; // Se continuar null, mostra o número
+            let emojiIcon = null; 
 
             if (isBonus) {
                 type = 'bonus';
@@ -1199,25 +1254,20 @@ export class Game {
                 }
             }
             
-            // Se for fase atual normal, usa Espadas
             if (state === 'current' && emojiIcon === null) {
                 emojiIcon = '⚔️'; 
             }
 
-            // --- 3. DEFINIR CORES ---
             const palettes = {
-                'normal':     { top: '#2563eb', bot: '#172554', stroke: '#60a5fa' }, // Azul
-                'elite':      { top: '#dc2626', bot: '#7f1d1d', stroke: '#fca5a5' }, // Vermelho
-                'final-boss': { top: '#f59e0b', bot: '#92400e', stroke: '#fcd34d' }, // Dourado
-                'bonus':      { top: '#c026d3', bot: '#701a75', stroke: '#e879f9' }, // Roxo
-                'completed':  { top: '#475569', bot: '#0f172a', stroke: '#1e293b' }  // Cinza
+                'normal':     { top: '#2563eb', bot: '#172554', stroke: '#60a5fa' },
+                'elite':      { top: '#dc2626', bot: '#7f1d1d', stroke: '#fca5a5' },
+                'final-boss': { top: '#f59e0b', bot: '#92400e', stroke: '#fcd34d' },
+                'bonus':      { top: '#c026d3', bot: '#701a75', stroke: '#e879f9' },
+                'completed':  { top: '#475569', bot: '#0f172a', stroke: '#1e293b' }
             };
 
-            // Se for bônus, usa a paleta 'bonus' diretamente, pois state agora é 'unlocked'
-            // Se state for 'completed' (fases normais), usa a paleta 'completed'
             const p = (state === 'completed') ? palettes['completed'] : palettes[type];
 
-            // Borda Dourada para a fase atual
             let finalStroke = p.stroke;
             let finalStrokeWidth = "2";
             
@@ -1226,15 +1276,12 @@ export class Game {
                 finalStrokeWidth = "4";  
             }
 
-            // --- 4. CRIAR O SVG ---
             const svgNS = "http://www.w3.org/2000/svg";
             const svgBtn = document.createElementNS(svgNS, "svg");
             const uniqueId = `btn-${isBonus ? 'bonus' : levelData.id}`;
             
-            // Adiciona a classe 'type' para controle de tamanho no CSS
             let cssClasses = `map-node-svg style-shield floating-node ${state} ${type}`;
             
-            // Fase atual tem animação extra
             if (state === 'current') cssClasses += ' current';
             
             svgBtn.setAttribute("class", cssClasses);
@@ -1244,7 +1291,6 @@ export class Game {
             
             svgBtn.style.setProperty('--i', Math.random() * 5);
 
-            // --- 5. GRADIENTES ---
             const defs = document.createElementNS(svgNS, "defs");
             defs.innerHTML = `
                 <linearGradient id="gradMain-${uniqueId}" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -1262,14 +1308,12 @@ export class Game {
             `;
             svgBtn.appendChild(defs);
 
-            // --- 6. SOMBRA CHÃO ---
             const shadow = document.createElementNS(svgNS, "ellipse");
             shadow.setAttribute("cx", "50"); shadow.setAttribute("cy", "95");
             shadow.setAttribute("rx", "25"); shadow.setAttribute("ry", "6");
             shadow.setAttribute("fill", state === 'completed' ? "rgba(0,0,0,0.8)" : `url(#gradShadow-${uniqueId})`);
             svgBtn.appendChild(shadow);
 
-            // --- 7. ESCUDO BASE ---
             const shieldPath = "M 50 5 L 90 20 v 25 c 0 30 -25 50 -40 55 c -15 -5 -40 -25 -40 -55 v -25 Z";
             const pathBase = document.createElementNS(svgNS, "path");
             pathBase.setAttribute("d", shieldPath);
@@ -1278,7 +1322,6 @@ export class Game {
             pathBase.setAttribute("stroke-width", finalStrokeWidth);
             svgBtn.appendChild(pathBase);
 
-            // --- 8. RACHADURA 3D ---
             if (state === 'completed') {
                 const crackD = "M 35 30 L 50 50 L 40 65 M 60 40 L 50 50 L 55 70";
                 
@@ -1299,7 +1342,6 @@ export class Game {
                 svgBtn.appendChild(crackHighlight);
             }
 
-            // --- 9. BRILHO GLOSSY ---
             const shinePath = "M 50 10 L 80 22 v 20 c 0 20 -15 35 -30 40 c -15 -5 -30 -20 -30 -40 v -20 Z";
             const pathShine = document.createElementNS(svgNS, "path");
             pathShine.setAttribute("d", shinePath);
@@ -1307,7 +1349,6 @@ export class Game {
             pathShine.style.pointerEvents = "none";
             svgBtn.appendChild(pathShine);
 
-            // --- 10. TEXTO ---
             const text = document.createElementNS(svgNS, "text");
             text.setAttribute("x", "50");
             text.setAttribute("y", "62");
@@ -1322,9 +1363,7 @@ export class Game {
             text.textContent = emojiIcon || levelNum;
             svgBtn.appendChild(text);
 
-            // --- EVENTO ---
             svgBtn.addEventListener('click', () => {
-                // Removemos o bloqueio do bônus, mas mantemos para fases futuras
                 if (state === 'locked') {
                     if(this.audio) this.audio.vibrate(50);
                     return; 
@@ -1341,7 +1380,6 @@ export class Game {
             return svgBtn;
         };
 
-        // --- GERA OS BOTÕES ---
         worldConfig.levels.forEach(level => {
             mapBg.appendChild(createSvgButton(level));
         });
@@ -2506,7 +2544,6 @@ export class Game {
     }
 
     gameWon(collectedGoals = {}, earnedRewards = []) {
-        // Limpa o save game pois a fase acabou
         this.clearSavedGame();
 
         if(this.audio) { 
@@ -2568,7 +2605,10 @@ export class Game {
 
         const currentWorld = WORLDS.find(w => w.levels.some(l => l.id === this.currentLevelConfig.id));
         let nextLevelConfig = null;
-        if (currentWorld) {
+        
+        // CORREÇÃO: Ignora busca de próxima fase se for o Guardião (ID 0)
+        // Isso garante que ele vá para a seleção de mundo ver o desbloqueio
+        if (currentWorld && this.currentLevelConfig.id !== 0) {
             nextLevelConfig = currentWorld.levels.find(l => l.id === nextLevelId);
         }
 
@@ -2586,8 +2626,7 @@ export class Game {
                     this.startAdventureLevel(nextLevelConfig);
                 } else {
                     this.showScreen(this.screenLevels); 
-                    if (currentWorld) this.openWorldMap(currentWorld);
-                    else this.showWorldSelect();
+                    this.showWorldSelect(); // Vai para a seleção de mundos
                 }
             });
         }
@@ -2601,12 +2640,19 @@ export class Game {
                 if(this.audio) this.audio.playClick();
                 modal.classList.add('hidden'); 
                 
-                this.showScreen(this.screenLevels); 
-                
-                if (currentWorld) {
-                    this.openWorldMap(currentWorld);
-                } else {
-                    this.showWorldSelect();
+                // --- CORREÇÃO DO BOTÃO VOLTAR ---
+                // Se for o Guardião (Nível 0), volta para o MENU PRINCIPAL
+                if (this.currentLevelConfig && this.currentLevelConfig.id === 0) {
+                    this.showScreen(this.screenMenu);
+                } 
+                else {
+                    // Se for qualquer outro nível, volta para o Mapa
+                    this.showScreen(this.screenLevels); 
+                    if (currentWorld) {
+                        this.openWorldMap(currentWorld);
+                    } else {
+                        this.showWorldSelect();
+                    }
                 }
             });
         }

@@ -138,5 +138,10 @@
         "mage_1": "Opening grimoire...",
         "mage_2": "Channeling mana...",
         "common": "Entering the Gate..."
+    },
+	"campfire": {
+        "text": "The campfire crackles under the moonlight. The path to the Dark Castle is sealed by ancient magic.\n\nTo proceed, you must prove your worth by defeating the **Guardian of the Worlds**.",
+        "btn_start": "🔥 Face the Guardian"
     }
+	
 }
