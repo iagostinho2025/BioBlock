@@ -1786,37 +1786,82 @@ export class Game {
             targetEl.classList.add('target-pop'); 
         }, 1200); 
     }
+	
+	ensureBoardClickDelegation() {
+  if (this._boardClickDelegationInstalled) return;
+  this._boardClickDelegationInstalled = true;
+
+  this.boardEl.addEventListener('click', (e) => {
+    const cell = e.target.closest('.cell');
+    if (!cell || !this.boardEl.contains(cell)) return;
+
+    const r = Number(cell.dataset.r);
+    const c = Number(cell.dataset.c);
+    if (Number.isNaN(r) || Number.isNaN(c)) return;
+
+    this.handleBoardClick(r, c);
+  });
+}
+
+ensureBoardCells() {
+  if (this._boardCells && this._boardCells.length === this.gridSize * this.gridSize) return;
+
+  this.ensureBoardClickDelegation();
+
+  this.boardEl.innerHTML = '';
+  this._boardCells = new Array(this.gridSize * this.gridSize);
+
+  const frag = document.createDocumentFragment();
+  for (let r = 0; r < this.gridSize; r++) {
+    for (let c = 0; c < this.gridSize; c++) {
+      const div = document.createElement('div');
+      div.className = 'cell';
+      div.dataset.r = r;
+      div.dataset.c = c;
+      this._boardCells[r * this.gridSize + c] = div;
+      frag.appendChild(div);
+    }
+  }
+  this.boardEl.appendChild(frag);
+}
+
+renderCell(div, cellData) {
+  // limpa estado visual anterior
+  div.className = 'cell';
+  div.innerText = '';
+
+  if (!cellData) return;
+
+  if (cellData.type === 'LAVA') {
+    div.classList.add('lava');
+    div.innerText = '🌋';
+    return;
+  }
+
+  div.classList.add('filled');
+
+  if (cellData.key) div.classList.add('type-' + cellData.key.toLowerCase());
+  else this.applyColorClass(div, cellData);
+
+  if (cellData.type === 'ITEM' || cellData.type === 'OBSTACLE') {
+    const emoji = cellData.emoji || EMOJI_MAP[cellData.key] || '?';
+    div.innerText = emoji;
+  }
+}
+
 
     renderGrid() {
-        this.boardEl.innerHTML = '';
-        this.grid.forEach((row, rIndex) => {
-            row.forEach((cellData, cIndex) => {
-                const div = document.createElement('div');
-                div.classList.add('cell');
-                div.dataset.r = rIndex; div.dataset.c = cIndex;
-                
-                div.addEventListener('click', () => this.handleBoardClick(rIndex, cIndex));
-                
-                if (cellData) {
-                    if (cellData.type === 'LAVA') { 
-                        div.classList.add('lava'); 
-                        div.innerText = '🌋';
-                    } else {
-                        div.classList.add('filled');
-                        if (cellData.key) div.classList.add('type-' + cellData.key.toLowerCase());
-                        else this.applyColorClass(div, cellData);
-                        
-                        // CORREÇÃO FINAL: Aceita ITEM e OBSTACLE (Pedra/Carvão)
-                        if (cellData.type === 'ITEM' || cellData.type === 'OBSTACLE') {
-                            const emoji = cellData.emoji || EMOJI_MAP[cellData.key] || '?';
-                            div.innerText = emoji;
-                        }
-                    }
-                }
-                this.boardEl.appendChild(div);
-            });
-        });
+  this.ensureBoardCells();
+
+  for (let r = 0; r < this.gridSize; r++) {
+    for (let c = 0; c < this.gridSize; c++) {
+      const div = this._boardCells[r * this.gridSize + c];
+      this.renderCell(div, this.grid[r][c]);
     }
+  }
+}
+
+
 
     applyColorClass(element, cellData) {
         element.className = element.className.replace(/type-[\w-]+/g, '').trim();
@@ -2292,158 +2337,184 @@ export class Game {
     }
 
     checkLines(dropX, dropY) {
-        let linesCleared = 0;
-        let damageDealt = false;
-        const rowsToClear = [];
-        const colsToClear = [];
+    let linesCleared = 0;
+    let damageDealt = false;
+    const rowsToClear = [];
+    const colsToClear = [];
 
-        // 1. Identifica o que precisa ser limpo
-        for (let r = 0; r < this.gridSize; r++) { if (this.grid[r].every(val => val !== null)) rowsToClear.push(r); }
-        for (let c = 0; c < this.gridSize; c++) {
-            let full = true;
-            for (let r = 0; r < this.gridSize; r++) { if (this.grid[r][c] === null) { full = false; break; } }
-            if (full) colsToClear.push(c);
+    // 1. Identifica o que precisa ser limpo
+    for (let r = 0; r < this.gridSize; r++) {
+        if (this.grid[r].every(val => val !== null)) rowsToClear.push(r);
+    }
+    for (let c = 0; c < this.gridSize; c++) {
+        let full = true;
+        for (let r = 0; r < this.gridSize; r++) {
+            if (this.grid[r][c] === null) { full = false; break; }
         }
+        if (full) colsToClear.push(c);
+    }
 
-        // 2. CAPTURA VISUAL (O "Pulo do Gato" AAA)
-        // Antes de apagar os dados, criamos clones visuais dos elementos que vão sumir.
-        const visualExplosions = [];
-        const uniquePos = new Set(); // Evita duplicatas em cruzamentos de linha/coluna
+    // 2. CAPTURA VISUAL (O "Pulo do Gato" AAA)
+    // Antes de apagar os dados, criamos clones visuais dos elementos que vão sumir.
+    const visualExplosions = [];
+    const uniquePos = new Set(); // Evita duplicatas em cruzamentos de linha/coluna
 
-        const addVisual = (r, c) => {
-            const key = `${r},${c}`;
-            if (uniquePos.has(key)) return;
-            uniquePos.add(key);
+    const addVisual = (r, c) => {
+        const key = `${r},${c}`;
+        if (uniquePos.has(key)) return;
+        uniquePos.add(key);
 
-            const idx = r * 8 + c;
-            const cell = this.boardEl.children[idx];
-            
-            // Só clona se tiver algo visível lá
-            if (cell && (cell.classList.contains('filled') || cell.classList.contains('lava'))) {
-                const rect = cell.getBoundingClientRect();
-                const clone = cell.cloneNode(true);
-                
-                // Configura o clone para ser "fixed" (solto na tela)
-                clone.classList.add('cell-explosion'); // Classe CSS que vamos criar
-                clone.style.position = 'fixed';
-                clone.style.left = `${rect.left}px`;
-                clone.style.top = `${rect.top}px`;
-                clone.style.width = `${rect.width}px`;
-                clone.style.height = `${rect.height}px`;
-                clone.style.margin = '0';
-                clone.style.zIndex = '9999';
-                clone.style.pointerEvents = 'none'; // Não interfere no clique
-                clone.style.transition = 'none';    // Reseta transições antigas
-                clone.style.transform = 'none';
+        const idx = r * 8 + c;
+        const cell = this.boardEl.children[idx];
 
-                // Guarda a cor para as partículas
-                const colorClass = Array.from(cell.classList).find(cls => cls.startsWith('type-') || cls === 'lava') || 'type-normal';
-                
-                visualExplosions.push({ clone, rect, colorClass });
+        // Só clona se tiver algo visível lá
+        if (cell && (cell.classList.contains('filled') || cell.classList.contains('lava'))) {
+            const rect = cell.getBoundingClientRect();
+            const clone = cell.cloneNode(true);
+
+            // Configura o clone para ser "fixed" (solto na tela)
+            clone.classList.add('cell-explosion'); // Classe CSS que vamos criar
+            clone.style.position = 'fixed';
+            clone.style.left = `${rect.left}px`;
+            clone.style.top = `${rect.top}px`;
+            clone.style.width = `${rect.width}px`;
+            clone.style.height = `${rect.height}px`;
+            clone.style.margin = '0';
+            clone.style.zIndex = '9999';
+            clone.style.pointerEvents = 'none'; // Não interfere no clique
+            clone.style.transition = 'none';    // Reseta transições antigas
+            clone.style.transform = 'none';
+
+            // Guarda a cor para as partículas
+            const colorClass = Array.from(cell.classList).find(cls => cls.startsWith('type-') || cls === 'lava') || 'type-normal';
+
+            visualExplosions.push({ clone, rect, colorClass });
+        }
+    };
+
+    rowsToClear.forEach(r => { for (let c = 0; c < this.gridSize; c++) addVisual(r, c); });
+    colsToClear.forEach(c => { for (let r = 0; r < this.gridSize; r++) addVisual(r, c); });
+
+    // 3. LIMPEZA LÓGICA (Acontece instantaneamente)
+    rowsToClear.forEach(r => { if (this.clearRow(r)) damageDealt = true; linesCleared++; });
+    colsToClear.forEach(c => { if (this.clearCol(c)) damageDealt = true; linesCleared++; });
+
+    if (linesCleared > 0) {
+        // Atualiza o grid real para vazio (os clones estarão por cima tapando o buraco)
+        this.renderGrid();
+
+        // 4. EXECUÇÃO DA ANIMAÇÃO (Wave otimizado)
+        // Em vez de N setTimeout(i*20), usamos um scheduler via requestAnimationFrame.
+        // Mantém o mesmo efeito, mas reduz timers e micro-engasgos no mobile.
+        const WAVE_STEP_MS = 20;     // mesmo "i * 20" de antes
+        const REMOVE_AFTER_MS = 400; // mesmo 400ms de antes
+
+        let startTime = performance.now();
+        let nextIndex = 0;
+
+        const tick = (t) => {
+            // Quantos itens já "deveriam" ter disparado até agora?
+            const shouldHave = Math.min(
+                visualExplosions.length,
+                Math.floor((t - startTime) / WAVE_STEP_MS) + 1
+            );
+
+            while (nextIndex < shouldHave) {
+                const item = visualExplosions[nextIndex++];
+
+                document.body.appendChild(item.clone);
+
+                // Força o navegador a reconhecer o elemento antes de animar
+                requestAnimationFrame(() => {
+                    item.clone.classList.add('explode');
+                    // Solta as partículas sincronizadas com o estouro do clone
+                    this.spawnExplosion(item.rect, item.colorClass);
+                });
+
+                // Remove o clone do DOM depois que a animação acaba
+                setTimeout(() => item.clone.remove(), REMOVE_AFTER_MS);
+            }
+
+            if (nextIndex < visualExplosions.length) {
+                requestAnimationFrame(tick);
             }
         };
 
-        rowsToClear.forEach(r => { for(let c=0; c<this.gridSize; c++) addVisual(r, c); });
-        colsToClear.forEach(c => { for(let r=0; r<this.gridSize; r++) addVisual(r, c); });
+        requestAnimationFrame(tick);
 
-        // 3. LIMPEZA LÓGICA (Acontece instantaneamente)
-        rowsToClear.forEach(r => { if(this.clearRow(r)) damageDealt = true; linesCleared++; });
-        colsToClear.forEach(c => { if(this.clearCol(c)) damageDealt = true; linesCleared++; });
+        // Lógica de Score e Combos (Mantida igual)
+        const now = Date.now();
+        if (now - (this.comboState.lastClearTime || 0) <= 5000) this.comboState.count++;
+        else this.comboState.count = 1;
+        this.comboState.lastClearTime = now;
 
-        if (linesCleared > 0) {
-            // Atualiza o grid real para vazio (os clones estarão por cima tapando o buraco)
-            this.renderGrid(); 
+        const comboCount = this.comboState.count;
 
-            // 4. EXECUÇÃO DA ANIMAÇÃO (Com delay em cascata)
-            visualExplosions.forEach((item, i) => {
-                // Delay de 20ms entre cada bloco cria o efeito "WAVE" satisfatório
-                setTimeout(() => {
-                    document.body.appendChild(item.clone);
-                    
-                    // Força o navegador a reconhecer o elemento antes de animar
-                    requestAnimationFrame(() => {
-                        item.clone.classList.add('explode');
-                        // Solta as partículas sincronizadas com o estouro do clone
-                        this.spawnExplosion(item.rect, item.colorClass);
-                    });
+        if (this.currentMode === 'adventure' && this.heroState) {
+            let unlockedSomething = false;
 
-                    // Remove o clone do DOM depois que a animação acaba
-                    setTimeout(() => item.clone.remove(), 400);
-
-                }, i * 20); 
-            });
-
-            // Lógica de Score e Combos (Mantida igual)
-            const now = Date.now();
-            if (now - (this.comboState.lastClearTime || 0) <= 5000) this.comboState.count++;
-            else this.comboState.count = 1;
-            this.comboState.lastClearTime = now;
-            
-            const comboCount = this.comboState.count;
-
-            if (this.currentMode === 'adventure' && this.heroState) {
-                let unlockedSomething = false;
-                
-                // (Lógica de desbloqueio de heróis mantida...)
-                if (comboCount >= 2 && (!this.heroState.thalion.unlocked || this.heroState.thalion.used)) {
-                    this.heroState.thalion.unlocked = true; this.heroState.thalion.used = false;
-                    this.effects.showFloatingTextCentered(this.i18n.t('game.hero_thalion_ready'), "feedback-gold");
-                    unlockedSomething = true;
-                }
-                if (comboCount >= 3 && (!this.heroState.nyx.unlocked || this.heroState.nyx.used)) {
-                    this.heroState.nyx.unlocked = true; this.heroState.nyx.used = false;
-                    this.effects.showFloatingTextCentered(this.i18n.t('game.hero_nyx_ready'), "feedback-epic");
-                    unlockedSomething = true;
-                }
-                
-                // Player e Mage logic...
-                this.heroState.player.lineCounter = (this.heroState.player.lineCounter || 0) + linesCleared;
-                if ((this.heroState.player.lineCounter >= 5 || comboCount >= 4) && (!this.heroState.player.unlocked || this.heroState.player.used)) {
-                    if(this.heroState.player.lineCounter >= 5) this.heroState.player.lineCounter = 0;
-                    this.heroState.player.unlocked = true; this.heroState.player.used = false;
-                    this.effects.showFloatingTextCentered(this.i18n.t('game.hero_player_ready'), "feedback-epic");
-                    unlockedSomething = true;
-                }
-
-                this.heroState.mage.lineCounter = (this.heroState.mage.lineCounter || 0) + linesCleared;
-                if ((this.heroState.mage.lineCounter >= 5 || comboCount >= 4) && (!this.heroState.mage.unlocked || this.heroState.mage.used)) {
-                    if(this.heroState.mage.lineCounter >= 5) this.heroState.mage.lineCounter = 0;
-                    this.heroState.mage.unlocked = true; this.heroState.mage.used = false;
-                    if(!unlockedSomething) this.effects.showFloatingTextCentered(this.i18n.t('game.hero_mage_ready'), "feedback-gold");
-                    unlockedSomething = true;
-                }
-
-                if (unlockedSomething) {
-                    this.updateControlsVisuals();
-                    if(this.audio) this.audio.playTone(600, 'sine', 0.2);
-                }
+            // (Lógica de desbloqueio de heróis mantida...)
+            if (comboCount >= 2 && (!this.heroState.thalion.unlocked || this.heroState.thalion.used)) {
+                this.heroState.thalion.unlocked = true; this.heroState.thalion.used = false;
+                this.effects.showFloatingTextCentered(this.i18n.t('game.hero_thalion_ready'), "feedback-gold");
+                unlockedSomething = true;
+            }
+            if (comboCount >= 3 && (!this.heroState.nyx.unlocked || this.heroState.nyx.used)) {
+                this.heroState.nyx.unlocked = true; this.heroState.nyx.used = false;
+                this.effects.showFloatingTextCentered(this.i18n.t('game.hero_nyx_ready'), "feedback-epic");
+                unlockedSomething = true;
             }
 
-            // Sons e Feedbacks
-            if (this.bossState.active) {
-                this.effects.showComboFeedback(linesCleared, comboCount, 'normal'); 
-                if(this.audio) this.audio.playBossClear(linesCleared);
-            } else {
-                let soundToPlay = null; let textType = 'normal';
-                if (comboCount === 1) {
-                    textType = 'normal';
-                    soundToPlay = linesCleared === 1 ? 'clear1' : linesCleared === 2 ? 'clear2' : linesCleared === 3 ? 'clear3' : 'clear4';
-                } else if (comboCount === 2) { textType = 'wow'; soundToPlay = 'wow'; }
-                else if (comboCount === 3) { textType = 'holycow'; soundToPlay = 'holycow'; }
-                else { textType = 'unreal'; soundToPlay = 'unreal'; }
-
-                this.effects.showComboFeedback(linesCleared, comboCount, textType);
-                if(this.audio) {
-                    this.audio.playSound(soundToPlay);
-                    const vibIntensity = Math.min(comboCount * 30, 200);
-                    this.audio.vibrate([vibIntensity, 50, vibIntensity]);
-                }
+            // Player e Mage logic...
+            this.heroState.player.lineCounter = (this.heroState.player.lineCounter || 0) + linesCleared;
+            if ((this.heroState.player.lineCounter >= 5 || comboCount >= 4) && (!this.heroState.player.unlocked || this.heroState.player.used)) {
+                if (this.heroState.player.lineCounter >= 5) this.heroState.player.lineCounter = 0;
+                this.heroState.player.unlocked = true; this.heroState.player.used = false;
+                this.effects.showFloatingTextCentered(this.i18n.t('game.hero_player_ready'), "feedback-epic");
+                unlockedSomething = true;
             }
-            this.score += (linesCleared * 10 * linesCleared) * comboCount; 
+
+            this.heroState.mage.lineCounter = (this.heroState.mage.lineCounter || 0) + linesCleared;
+            if ((this.heroState.mage.lineCounter >= 5 || comboCount >= 4) && (!this.heroState.mage.unlocked || this.heroState.mage.used)) {
+                if (this.heroState.mage.lineCounter >= 5) this.heroState.mage.lineCounter = 0;
+                this.heroState.mage.unlocked = true; this.heroState.mage.used = false;
+                if (!unlockedSomething) this.effects.showFloatingTextCentered(this.i18n.t('game.hero_mage_ready'), "feedback-gold");
+                unlockedSomething = true;
+            }
+
+            if (unlockedSomething) {
+                this.updateControlsVisuals();
+                if (this.audio) this.audio.playTone(600, 'sine', 0.2);
+            }
         }
-        
-        return damageDealt;
+
+        // Sons e Feedbacks
+        if (this.bossState.active) {
+            this.effects.showComboFeedback(linesCleared, comboCount, 'normal');
+            if (this.audio) this.audio.playBossClear(linesCleared);
+        } else {
+            let soundToPlay = null; let textType = 'normal';
+            if (comboCount === 1) {
+                textType = 'normal';
+                soundToPlay = linesCleared === 1 ? 'clear1' : linesCleared === 2 ? 'clear2' : linesCleared === 3 ? 'clear3' : 'clear4';
+            } else if (comboCount === 2) { textType = 'wow'; soundToPlay = 'wow'; }
+            else if (comboCount === 3) { textType = 'holycow'; soundToPlay = 'holycow'; }
+            else { textType = 'unreal'; soundToPlay = 'unreal'; }
+
+            this.effects.showComboFeedback(linesCleared, comboCount, textType);
+            if (this.audio) {
+                this.audio.playSound(soundToPlay);
+                const vibIntensity = Math.min(comboCount * 30, 200);
+                this.audio.vibrate([vibIntensity, 50, vibIntensity]);
+            }
+        }
+
+        this.score += (linesCleared * 10 * linesCleared) * comboCount;
     }
+
+    return damageDealt;
+}
+
 	
 	
 
