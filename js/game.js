@@ -90,67 +90,106 @@ export class Game {
 
         this.setupMenuEvents();
         this.startLoadingSequence();
+		
+		// --- SAVE (debounce seguro) ---
+		this._saveTimer = null;
+		this._pendingSaveJson = null;
+		this._lastSavedJson = null;
+		this._saveDisabled = false;
+		this._saveToken = 0; // invalida callbacks antigos
+
     }
 	
 	// --- PERSISTÊNCIA DE ESTADO (SAVE GAME) ---
 
     saveGameState() {
-    // Só salvamos no modo aventura para evitar conflitos
     if (this.currentMode !== 'adventure' || !this.currentLevelConfig) return;
+    if (this._saveDisabled) return;
 
-    // Marca que há mudanças pendentes
-    this._saveDirty = true;
-
-    // Se já tem um save agendado, não agenda outro
-    if (this._saveScheduled) return;
-    this._saveScheduled = true;
-
-    const schedule = (cb) => {
-        // Tenta salvar quando o browser estiver ocioso (melhor no mobile)
-        if (typeof requestIdleCallback === 'function') {
-            requestIdleCallback(cb, { timeout: 800 });
-        } else {
-            // Fallback: pequeno delay para agrupar múltiplas mudanças
-            setTimeout(cb, 300);
-        }
+    const state = {
+        levelId: this.currentLevelConfig.id,
+        grid: this.grid,
+        score: this.score,
+        hand: this.currentHand,
+        bossState: this.bossState,
+        heroState: this.heroState,
+        currentGoals: this.currentGoals,
+        collected: this.collected,
+        comboState: this.comboState,
+        powerUps: this.powerUps
     };
 
-    schedule(() => {
-        this._saveScheduled = false;
+    let json;
+    try {
+        json = JSON.stringify(state);
+    } catch (e) {
+        console.warn('Falha ao serializar save:', e);
+        return;
+    }
 
-        // Se nada mudou desde o agendamento, não faz nada
-        if (!this._saveDirty) return;
-        this._saveDirty = false;
+    // Dedupe: evita salvar exatamente o mesmo payload repetidamente
+    if (json === this._lastSavedJson) return;
 
-        // Monta o objeto de estado (mesmo formato do original)
-        const state = {
-            levelId: this.currentLevelConfig.id,
-            grid: this.grid,
-            score: this.score,
-            hand: this.currentHand,
-            bossState: this.bossState,
-            heroState: this.heroState,
-            currentGoals: this.currentGoals,
-            collected: this.collected,
-            comboState: this.comboState,
-            powerUps: this.powerUps // Salva qtd de powerups atual
-        };
+    this._pendingSaveJson = json;
+
+    // Invalida qualquer callback anterior
+    const myToken = ++this._saveToken;
+
+    if (this._saveTimer) clearTimeout(this._saveTimer);
+
+    // 200~400ms costuma ser bom no mobile
+    this._saveTimer = setTimeout(() => {
+        // Se algo mudou nesse meio tempo, ignora este callback
+        if (this._saveDisabled) return;
+        if (myToken !== this._saveToken) return;
+        if (!this._pendingSaveJson) return;
 
         try {
-            const json = JSON.stringify(state);
-
-            // Opcional seguro: evita setItem se o conteúdo for idêntico ao último salvo
-            if (this._lastSaveJson === json) return;
-            this._lastSaveJson = json;
-
-            localStorage.setItem('blocklands_savestate', json);
+            localStorage.setItem('blocklands_savestate', this._pendingSaveJson);
+            this._lastSavedJson = this._pendingSaveJson;
         } catch (e) {
             console.warn('Falha ao salvar jogo:', e);
+        } finally {
+            this._pendingSaveJson = null;
+            this._saveTimer = null;
         }
-    });
+    }, 250);
 }
 
-	
+cancelPendingSaveGameState() {
+    // invalida callbacks antigos imediatamente
+    this._saveToken++;
+
+    if (this._saveTimer) {
+        clearTimeout(this._saveTimer);
+        this._saveTimer = null;
+    }
+    this._pendingSaveJson = null;
+}
+
+flushSaveGameState() {
+    if (this._saveDisabled) return;
+
+    // Se tem algo pendente, grava imediatamente
+    if (this._pendingSaveJson) {
+        try {
+            localStorage.setItem('blocklands_savestate', this._pendingSaveJson);
+            this._lastSavedJson = this._pendingSaveJson;
+        } catch (e) {
+            console.warn('Falha ao flush do save:', e);
+        } finally {
+            this._pendingSaveJson = null;
+        }
+    }
+
+    // cancela timer por limpeza
+    if (this._saveTimer) {
+        clearTimeout(this._saveTimer);
+        this._saveTimer = null;
+    }
+}
+
+
 	// --- NOVO SISTEMA DE HISTÓRIA E SELEÇÃO ---
 
     checkAdventureIntro() {
@@ -411,22 +450,23 @@ export class Game {
             }
 
             // Atualiza a UI Visualmente
-            this.renderGrid();
-            this.renderDock();
-            this.renderControlsUI(); // Atualiza botões de herói/powerup
+this.renderGrid();
+this.renderDock();
+this.renderControlsUI(); // Atualiza botões de herói/powerup
 
-            if (this.bossState.active) {
-                this.setupBossUI(this.currentLevelConfig.boss); // Recria a estrutura HTML
-                this.updateBossUI(); // Atualiza a vida
-            } else {
-                this.setupGoalsUI(this.currentGoals); // Recria estrutura
-                this.updateGoalsUI(); // Atualiza números
-            }
+if (this.bossState.active) {
+    this.setupBossUI(this.currentLevelConfig.boss); // Recria a estrutura HTML
+    this.updateBossUI(); // Atualiza a vida
+} else {
+    // Recria a UI dos goals (isso zera this.collected internamente)
+    this.setupGoalsUI(this.currentGoals);
 
-            // Se for fase normal, temos que garantir que a UI de gols reflete o coletado
-            if (!this.bossState.active) {
-                this.updateGoalsUI();
-            }
+    // REAPLICA o progresso salvo
+    this.collected = state.collected || this.collected;
+
+    // Atualiza números/estado completado na UI
+    this.updateGoalsUI();
+}
 
             return true; // Sucesso
         } catch (e) {
@@ -436,8 +476,17 @@ export class Game {
     }
 
     clearSavedGame() {
+    this.cancelPendingSaveGameState();
+
+    try {
         localStorage.removeItem('blocklands_savestate');
+    } catch (e) {
+        console.warn('Falha ao remover save:', e);
     }
+
+    this._lastSavedJson = null;
+}
+
 
     loadSettings() {
         const saved = localStorage.getItem('blocklands_settings');
@@ -1039,14 +1088,39 @@ export class Game {
 
     
     renderDock() {
+    if (!this.dockEl) return;
+
+    // Cria e mantém 3 slots fixos (uma vez)
+    if (!this._dockSlots || this._dockSlots.length !== 3) {
         this.dockEl.innerHTML = '';
-        this.currentHand.forEach((piece, index) => {
+        this._dockSlots = [];
+
+        const frag = document.createDocumentFragment();
+        for (let i = 0; i < 3; i++) {
             const slot = document.createElement('div');
-            slot.classList.add('dock-slot');
-            if (piece) this.createDraggablePiece(piece, index, slot);
-            this.dockEl.appendChild(slot);
-        });
+            slot.className = 'dock-slot';
+            slot.dataset.slot = String(i);
+            this._dockSlots.push(slot);
+            frag.appendChild(slot);
+        }
+        this.dockEl.appendChild(frag);
     }
+
+    // Atualiza cada slot sem destruir o dock inteiro
+    for (let index = 0; index < 3; index++) {
+        const slot = this._dockSlots[index];
+
+        // Limpa só o conteúdo do slot (remove peça anterior e listeners dela junto com o DOM)
+        // Mantém o slot em si (evita layout churn)
+        if (slot.firstChild) slot.innerHTML = '';
+
+        const piece = this.currentHand[index];
+        if (piece) {
+            this.createDraggablePiece(piece, index, slot);
+        }
+    }
+}
+
 
     // --- GERENCIAMENTO DE TELAS ---
     showScreen(screenEl) {
@@ -1684,29 +1758,23 @@ export class Game {
     clearTheme() { document.body.className = ''; }
 
     retryGame() {
-        this.modalOver.classList.add('hidden');
-        this.modalWin.classList.add('hidden');
-        
-        // SOLUÇÃO DEFINITIVA DE ÁUDIO:
-        // Paramos o som atual manualmente para garantir silêncio imediato
-        if (this.audio) this.audio.stopMusic();
+    this.modalOver.classList.add('hidden');
+    this.modalWin.classList.add('hidden');
 
-        if (this.currentMode === 'adventure' && this.currentLevelConfig) {
-            // TRUQUE: Em vez de apenas resetar o grid (resetGame), 
-            // nós chamamos a função que inicia a fase do zero.
-            // Isso força o sistema de áudio a carregar a música da forma correta,
-            // exatamente como acontece quando você entra na fase pela primeira vez.
-            
-            // Um micro-delay de 10ms apenas para o navegador processar o 'stopMusic' acima
-            setTimeout(() => {
-                this.startAdventureLevel(this.currentLevelConfig);
-            }, 10);
-            
-        } else {
-            // Modo Casual (sem música específica de boss, reset simples funciona)
-            this.resetGame();
-        }
+    if (this.audio) this.audio.stopMusic();
+
+    // reabilita save no restart
+    this._saveDisabled = false;
+
+    if (this.currentMode === 'adventure' && this.currentLevelConfig) {
+        setTimeout(() => {
+            this.startAdventureLevel(this.currentLevelConfig);
+        }, 10);
+    } else {
+        this.resetGame();
     }
+}
+
 
     resetGame() {
         this.grid = Array(this.gridSize).fill().map(() => Array(this.gridSize).fill(null));
@@ -1826,100 +1894,72 @@ _releaseFlyer(flyer) {
 
     // --- EFEITO VISUAL: Voo ---
     runFlyAnimation(r, c, key, emoji) {
-  const idx = r * 8 + c;
-  const cell = this.boardEl.children[idx];
-  if (!cell) return;
+    const idx = r * 8 + c;
+    const cell = this.boardEl.children[idx];
+    if (!cell) return;
 
-  const startRect = cell.getBoundingClientRect();
+    const startRect = cell.getBoundingClientRect();
 
-  let targetEl = null;
-  if (this.bossState.active) targetEl = document.getElementById('boss-target');
-  else targetEl = document.getElementById(`goal-item-${key}`);
-  if (!targetEl) return;
+    let targetEl = null;
+    if (this.bossState.active) {
+        targetEl = document.getElementById('boss-target');
+    } else {
+        targetEl = document.getElementById(`goal-item-${key}`);
+    }
+    if (!targetEl) return;
 
-  const targetRect = targetEl.getBoundingClientRect();
+    const targetRect = targetEl.getBoundingClientRect();
 
-  const flyer = this._acquireFlyer(emoji);
+    const flyer = document.createElement('div');
+    flyer.classList.add('flying-item');
 
-  // garante no DOM
-  if (!flyer.parentNode) document.body.appendChild(flyer);
+    flyer.style.position = 'fixed';
+    flyer.style.zIndex = '9999';
+    flyer.style.pointerEvents = 'none';
 
-  // Origem e destino (mesma lógica)
-  const startX = startRect.left + startRect.width / 4;
-  const startY = startRect.top + startRect.height / 4;
+    // Melhor: animar só transform (evita layout e evita "transition: all")
+    flyer.style.transition = 'transform 1.2s cubic-bezier(0.25, 0.1, 0.25, 1.0)';
+    flyer.style.transformOrigin = 'center';
 
-  const destX = targetRect.left + targetRect.width / 2 - 20;
-  const destY = targetRect.top + targetRect.height / 2 - 20;
+    flyer.innerText = emoji;
 
-  // “Arco” (um ponto no meio, elevando um pouco)
-  const midX = (startX + destX) * 0.5;
-  const lift = Math.max(60, Math.min(140, Math.abs(destX - startX) * 0.15));
-  const midY = (startY + destY) * 0.5 - lift;
+    // Posição inicial (mesma ideia do seu left/top original)
+    const startX = startRect.left + startRect.width / 4;
+    const startY = startRect.top + startRect.height / 4;
 
-  // Visual: aparece rápido e voa com leve giro
-  flyer.style.opacity = '1';
+    // Destino (mesmo cálculo)
+    const destX = targetRect.left + targetRect.width / 2 - 20;
+    const destY = targetRect.top + targetRect.height / 2 - 20;
 
-  // Se houver animação anterior nesse flyer, cancela
-  const prevAnim = this._flyerAnimCancel.get(flyer);
-  if (prevAnim && prevAnim.cancel) prevAnim.cancel();
+    // Em fixed + transform: definimos a âncora em (0,0) e movemos via translate
+    flyer.style.left = '0px';
+    flyer.style.top = '0px';
 
-  // Preferir WAAPI (melhor pra keyframes e arco)
-  if (flyer.animate) {
-    const duration = 950; // mais rápido que 1.2s (sente mais “snappy”), ajuste se quiser
+    // Estado inicial: translate + scale grande
+    flyer.style.transform = `translate3d(${startX}px, ${startY}px, 0) scale(1.5)`;
 
-    const anim = flyer.animate(
-      [
-        { transform: `translate3d(${startX}px, ${startY}px, 0) scale(1.6) rotate(-10deg)`, opacity: 1 },
-        { transform: `translate3d(${midX}px, ${midY}px, 0) scale(1.15) rotate(10deg)`, opacity: 1 },
-        { transform: `translate3d(${destX}px, ${destY}px, 0) scale(0.95) rotate(0deg)`, opacity: 0.95 }
-      ],
-      {
-        duration,
-        easing: 'cubic-bezier(0.22, 1, 0.36, 1)', // ease-out “premium”
-        fill: 'forwards'
-      }
-    );
+    document.body.appendChild(flyer);
 
-    this._flyerAnimCancel.set(flyer, anim);
-
-    anim.onfinish = () => {
-      // remove flyer e dá o “pop” no target sem reflow
-      this._releaseFlyer(flyer);
-
-      targetEl.classList.remove('target-pop');
-      requestAnimationFrame(() => targetEl.classList.add('target-pop'));
-    };
-
-    // fallback de segurança caso onfinish não dispare (raro)
-    setTimeout(() => {
-      if (this._flyerPoolBusy.has(flyer)) {
-        this._releaseFlyer(flyer);
-        targetEl.classList.remove('target-pop');
-        requestAnimationFrame(() => targetEl.classList.add('target-pop'));
-      }
-    }, duration + 80);
-
-    return;
-  }
-
-  // Fallback (caso animate não exista): versão transform + transition
-  flyer.style.transition = 'transform 0.95s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.95s cubic-bezier(0.22, 1, 0.36, 1)';
-  flyer.style.transform = `translate3d(${startX}px, ${startY}px, 0) scale(1.6) rotate(-10deg)`;
-
-  requestAnimationFrame(() => {
+    // Sem reflow forçado: usa dois frames para garantir commit do estilo inicial
     requestAnimationFrame(() => {
-      flyer.style.transform = `translate3d(${destX}px, ${destY}px, 0) scale(0.95) rotate(0deg)`;
-      flyer.style.opacity = '0.95';
+        requestAnimationFrame(() => {
+            // Estado final: translate + scale menor
+            flyer.style.transform = `translate3d(${destX}px, ${destY}px, 0) scale(0.8)`;
+        });
     });
-  });
 
-  setTimeout(() => {
-    this._releaseFlyer(flyer);
-    targetEl.classList.remove('target-pop');
-    requestAnimationFrame(() => targetEl.classList.add('target-pop'));
-  }, 1030);
+    // Remove ao fim
+    setTimeout(() => {
+        flyer.remove();
+
+        // Pop do alvo SEM forçar reflow com offsetWidth
+        // Remove a classe e recoloca no próximo frame
+        targetEl.classList.remove('target-pop');
+        requestAnimationFrame(() => {
+            targetEl.classList.add('target-pop');
+        });
+    }, 1200);
 }
-
 
 	
 	ensureBoardClickDelegation() {
@@ -2006,79 +2046,159 @@ renderCell(div, cellData) {
     }
 
     spawnNewHand() {
-        if(!this.dockEl) return;
-        this.dockEl.innerHTML = '';
-        
-        const config = this.currentLevelConfig;
-        const customItems = (this.currentMode === 'adventure' && config) ? config.items : null;
-        
-        const isBoss = config && config.type === 'boss';
-        const isBonus = config && config.type === 'bonus';
-        const useRPGStats = isBoss || isBonus;
+    if (!this.dockEl) return;
 
-        let forceEasy = false;
-        
-        // 1. CONTAGEM DE ESPAÇOS VAZIOS (Smart RNG)
-        let emptyCount = 0;
-        this.grid.forEach(r => r.forEach(c => { if(!c) emptyCount++; }));
-        
-        // Se tiver menos de 15 blocos livres (aprox 20%), ativa modo de emergência
-        const isEmergency = emptyCount < 15;
+    const config = this.currentLevelConfig;
+    const customItems = (this.currentMode === 'adventure' && config) ? config.items : null;
 
-        if (isBonus && emptyCount > 30) forceEasy = true; 
+    const isBoss = !!(config && config.type === 'boss');
+    const isBonus = !!(config && config.type === 'bonus');
+    const useRPGStats = isBoss || isBonus;
 
-        this.currentHand = [];
-        for(let i=0; i<3; i++) {
-            // Garante peça pequena se for emergência E for a primeira peça da mão
-            const forceSimple = (isEmergency && i === 0) || (forceEasy && i === 0);
+    let forceEasy = false;
 
-            const piece = getRandomPiece(customItems, useRPGStats, forceSimple);
-            this.currentHand.push(piece);
+    // 1) CONTAGEM DE ESPAÇOS VAZIOS (Smart RNG) — otimizada (early exit)
+    // Precisamos só saber:
+    // - se emptyCount < 15 (emergency)
+    // - e, se bônus: se emptyCount > 30 (forceEasy)
+    const N = this.gridSize;
+    let emptyCount = 0;
+
+    const needBonusCheck = isBonus;         // só importa >30 no bônus
+    const stopAt = needBonusCheck ? 31 : 15; // se chegar em 15 já sabemos que NÃO é emergência
+
+    outer:
+    for (let r = 0; r < N; r++) {
+        const row = this.grid[r];
+        for (let c = 0; c < N; c++) {
+            if (!row[c]) {
+                emptyCount++;
+                if (emptyCount >= stopAt) break outer;
+            }
         }
-        
-        this.renderDock(); 
-
-        // SALVA O ESTADO ASSIM QUE AS NOVAS PEÇAS NASCEM
-        this.saveGameState();
-
-        setTimeout(() => { if (!this.checkMovesAvailable()) this.gameOver(); }, 100);
     }
+
+    const isEmergency = emptyCount < 15;
+
+    // Regra original: no bônus, se emptyCount > 30, força peça fácil
+    // Como usamos early-exit em 31, isso continua equivalente.
+    if (isBonus && emptyCount > 30) forceEasy = true;
+
+    // 2) Geração da mão (sem alocar arrays desnecessariamente)
+    if (!this.currentHand) this.currentHand = [];
+    this.currentHand.length = 0;
+
+    for (let i = 0; i < 3; i++) {
+        const forceSimple = ((isEmergency && i === 0) || (forceEasy && i === 0));
+        const piece = getRandomPiece(customItems, useRPGStats, forceSimple);
+        this.currentHand.push(piece);
+    }
+
+
+    this.renderDock();
+
+    // 4) Save (agora já está “deboounced” pela versão otimizada)
+    this.saveGameState();
+
+    // 5) Check de game over sem travar frame
+    // Mantém a ideia do delay (antes era 100ms), mas tenta rodar em idle.
+    const doCheck = () => { if (!this.checkMovesAvailable()) this.gameOver(); };
+
+    if (typeof requestIdleCallback === 'function') {
+        requestIdleCallback(doCheck, { timeout: 150 });
+    } else {
+        // Fallback compatível com o comportamento antigo
+        setTimeout(doCheck, 100);
+    }
+}
+
 
     createDraggablePiece(piece, index, parentContainer) {
-        const container = document.createElement('div');
-        container.classList.add('draggable-piece');
-        container.dataset.index = index;
-        container.style.gridTemplateColumns = `repeat(${piece.matrix[0].length}, 1fr)`;
-        container.style.gridTemplateRows = `repeat(${piece.matrix.length}, 1fr)`;
-        
-        container.addEventListener('click', (e) => {
-            this.handlePieceClick(index);
-        });
-        
-        piece.layout.forEach(row => {
-            row.forEach(cellData => {
-                const block = document.createElement('div');
-                if (cellData) {
-                    block.classList.add('block-unit');
-                    this.applyColorClass(block, cellData);
-                    
-                    // CORREÇÃO: Garante o emoji certo na peça do deck
-                    if (typeof cellData === 'object' && cellData.type === 'ITEM') {
-                        const emoji = cellData.emoji || EMOJI_MAP[cellData.key] || '?';
-                        block.innerText = emoji;
-                    }
-                } else {
-                    block.style.visibility = 'hidden';
-                }
-                container.appendChild(block);
-            });
-        });
-        
-        this.attachDragEvents(container, piece);
+    // Reuso do container se existir
+    let container = parentContainer.querySelector('.draggable-piece');
+
+    const rows = piece.matrix.length;
+    const cols = piece.matrix[0].length;
+
+    if (!container) {
+        container = document.createElement('div');
+        container.className = 'draggable-piece';
         parentContainer.appendChild(container);
+
+        // Click delegation local: um handler só por container (não por bloco)
+        container.addEventListener('click', () => {
+            this.handlePieceClick(Number(container.dataset.index));
+        });
+
+        // Drag listeners (guardados por _dragAttached)
+        this.attachDragEvents(container, piece);
     }
 
+    // Atualiza índice (importante quando reusa)
+    container.dataset.index = index;
+
+    // Guarda referência da peça atual (útil para debug e futuras otimizações)
+    container._pieceRef = piece;
+
+    // Atualiza grid template (só estilo)
+    container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+
+    // --- Pool de blocks dentro do container ---
+    const needed = rows * cols;
+
+    // Se o número de filhos não bate, reconstrói só os blocos (não o container)
+    if (container.children.length !== needed) {
+        container.innerHTML = '';
+        const frag = document.createDocumentFragment();
+        for (let i = 0; i < needed; i++) {
+            frag.appendChild(document.createElement('div'));
+        }
+        container.appendChild(frag);
+    }
+
+    // Preenche os blocos sem recriar DOM
+    let k = 0;
+    for (let i = 0; i < piece.layout.length; i++) {
+        const row = piece.layout[i];
+        for (let j = 0; j < row.length; j++) {
+            const cellData = row[j];
+            const block = container.children[k++];
+
+            // Reset barato do bloco
+            block.className = '';
+            block.innerText = '';
+            block.style.visibility = '';
+
+            if (cellData) {
+                block.classList.add('block-unit');
+                this.applyColorClass(block, cellData);
+
+                // Emoji para ITEM no deck
+                if (typeof cellData === 'object' && cellData.type === 'ITEM') {
+                    const emoji = cellData.emoji || EMOJI_MAP[cellData.key] || '?';
+                    block.innerText = emoji;
+                }
+            } else {
+                block.style.visibility = 'hidden';
+            }
+        }
+    }
+
+    // Garantia: se layout for menor que rows*cols por algum motivo
+    // (normalmente não acontece), escondemos o resto
+    while (k < container.children.length) {
+        const block = container.children[k++];
+        block.className = '';
+        block.innerText = '';
+        block.style.visibility = 'hidden';
+    }
+}
+
+
     attachDragEvents(el, piece) {
+	if (el._dragAttached) return;   // ✅ evita duplicar listeners
+    el._dragAttached = true;
     let isDragging = false;
     let clone = null;
     let cellPixelSize = 0;
@@ -2495,18 +2615,42 @@ clearGhostPreview() {
 
 
     canPlace(r, c, piece) {
-        for (let i = 0; i < piece.layout.length; i++) {
-            for (let j = 0; j < piece.layout[i].length; j++) {
-                if (piece.layout[i][j]) { 
-                    const targetR = r + i;
-                    const targetC = c + j;
-                    if (targetR < 0 || targetR >= this.gridSize || targetC < 0 || targetC >= this.gridSize) return false;
-                    if (this.grid[targetR][targetC] !== null) return false;
-                }
+    // Cache da forma da peça (feito uma vez por peça)
+    // Obs: usa piece.layout como fonte de verdade (igual ao original)
+    let cache = piece._placeCache;
+    if (!cache) {
+        const filled = [];
+        const rows = piece.layout.length;
+        const cols = piece.layout[0]?.length || 0;
+
+        for (let i = 0; i < rows; i++) {
+            const row = piece.layout[i];
+            for (let j = 0; j < cols; j++) {
+                if (row[j]) filled.push([i, j]);
             }
         }
-        return true;
+
+        cache = piece._placeCache = { rows, cols, filled };
     }
+
+    // Bounds check (rápido): se a bounding box da peça sai do grid, já falha.
+    // Como nosso cache considera o retângulo total do layout, isso é equivalente ao seu loop original
+    // (ele acabaria batendo em out-of-bounds em algum bloco preenchido).
+    if (r < 0 || c < 0) return false;
+    if (r + cache.rows > this.gridSize) return false;
+    if (c + cache.cols > this.gridSize) return false;
+
+    // Verifica apenas as células preenchidas
+    const g = this.grid;
+    for (let k = 0; k < cache.filled.length; k++) {
+        const dr = cache.filled[k][0];
+        const dc = cache.filled[k][1];
+        if (g[r + dr][c + dc] !== null) return false;
+    }
+
+    return true;
+}
+
 
     placePiece(r, c, piece) {
         if (!this.canPlace(r, c, piece)) return false;
@@ -3004,6 +3148,10 @@ clearGhostPreview() {
     }
 	
     gameOver() {
+		// impede qualquer flush/debounce de ressuscitar o save depois da derrota
+		this._saveDisabled = true;
+		this.cancelPendingSaveGameState();
+		this.clearSavedGame();
         // Limpa o save game na derrota para obrigar reinício
         this.clearSavedGame();
 

@@ -273,6 +273,7 @@ export class PowersSystem {
 
         piece.layout = newLayout;
         piece.matrix = newLayout;
+		delete piece._placeCache;
         
         this.game.powerUps.rotate--;
         this.game.savePowerUps();
