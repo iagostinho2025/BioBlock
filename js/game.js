@@ -95,10 +95,34 @@ export class Game {
 	// --- PERSISTÊNCIA DE ESTADO (SAVE GAME) ---
 
     saveGameState() {
-        // Só salvamos no modo aventura para evitar conflitos
-        if (this.currentMode !== 'adventure' || !this.currentLevelConfig) return;
+    // Só salvamos no modo aventura para evitar conflitos
+    if (this.currentMode !== 'adventure' || !this.currentLevelConfig) return;
 
-        // Monta o objeto de estado
+    // Marca que há mudanças pendentes
+    this._saveDirty = true;
+
+    // Se já tem um save agendado, não agenda outro
+    if (this._saveScheduled) return;
+    this._saveScheduled = true;
+
+    const schedule = (cb) => {
+        // Tenta salvar quando o browser estiver ocioso (melhor no mobile)
+        if (typeof requestIdleCallback === 'function') {
+            requestIdleCallback(cb, { timeout: 800 });
+        } else {
+            // Fallback: pequeno delay para agrupar múltiplas mudanças
+            setTimeout(cb, 300);
+        }
+    };
+
+    schedule(() => {
+        this._saveScheduled = false;
+
+        // Se nada mudou desde o agendamento, não faz nada
+        if (!this._saveDirty) return;
+        this._saveDirty = false;
+
+        // Monta o objeto de estado (mesmo formato do original)
         const state = {
             levelId: this.currentLevelConfig.id,
             grid: this.grid,
@@ -113,11 +137,19 @@ export class Game {
         };
 
         try {
-            localStorage.setItem('blocklands_savestate', JSON.stringify(state));
+            const json = JSON.stringify(state);
+
+            // Opcional seguro: evita setItem se o conteúdo for idêntico ao último salvo
+            if (this._lastSaveJson === json) return;
+            this._lastSaveJson = json;
+
+            localStorage.setItem('blocklands_savestate', json);
         } catch (e) {
             console.warn('Falha ao salvar jogo:', e);
         }
-    }
+    });
+}
+
 	
 	// --- NOVO SISTEMA DE HISTÓRIA E SELEÇÃO ---
 
@@ -1725,67 +1757,170 @@ export class Game {
             this.effects.spawnExplosion(rect, colorClass);
         }
     }
+	
+	ensureFlyerPool() {
+  if (this._flyerPool) return;
+
+  this._flyerPool = [];
+  this._flyerPoolBusy = new Set();
+  this._flyerAnimCancel = new Map();
+
+  const POOL_SIZE = 16; // suficiente pra spam (ajuste 12~24)
+
+  for (let i = 0; i < POOL_SIZE; i++) {
+    const flyer = document.createElement('div');
+    flyer.className = 'flying-item';
+    flyer.style.position = 'fixed';
+    flyer.style.left = '0px';
+    flyer.style.top = '0px';
+    flyer.style.zIndex = '9999';
+    flyer.style.pointerEvents = 'none';
+    flyer.style.opacity = '0';
+
+    // Não append agora: deixamos “fora” até precisar
+    this._flyerPool.push(flyer);
+  }
+}
+
+_acquireFlyer(emoji) {
+  this.ensureFlyerPool();
+
+  // pega um que não está ocupado
+  for (const flyer of this._flyerPool) {
+    if (!this._flyerPoolBusy.has(flyer)) {
+      this._flyerPoolBusy.add(flyer);
+      flyer.innerText = emoji;
+      return flyer;
+    }
+  }
+
+  // Sem disponível: cria um extra (fallback), mas isso é raro
+  const extra = document.createElement('div');
+  extra.className = 'flying-item';
+  extra.style.position = 'fixed';
+  extra.style.left = '0px';
+  extra.style.top = '0px';
+  extra.style.zIndex = '9999';
+  extra.style.pointerEvents = 'none';
+  extra.style.opacity = '0';
+  extra.innerText = emoji;
+
+  this._flyerPool.push(extra);
+  this._flyerPoolBusy.add(extra);
+  return extra;
+}
+
+_releaseFlyer(flyer) {
+  // cancela animação se ainda existir
+  const anim = this._flyerAnimCancel.get(flyer);
+  if (anim && anim.cancel) anim.cancel();
+  this._flyerAnimCancel.delete(flyer);
+
+  flyer.style.opacity = '0';
+  flyer.style.transform = 'translate3d(0px,0px,0) scale(1)';
+  if (flyer.parentNode) flyer.parentNode.removeChild(flyer);
+
+  this._flyerPoolBusy.delete(flyer);
+}
+
 
     // --- EFEITO VISUAL: Voo ---
     runFlyAnimation(r, c, key, emoji) {
-        const idx = r * 8 + c;
-        const cell = this.boardEl.children[idx];
-        if (!cell) return;
-        const startRect = cell.getBoundingClientRect();
+  const idx = r * 8 + c;
+  const cell = this.boardEl.children[idx];
+  if (!cell) return;
 
-        let targetEl = null;
+  const startRect = cell.getBoundingClientRect();
 
-        if (this.bossState.active) {
-            targetEl = document.getElementById('boss-target');
-        } else {
-            targetEl = document.getElementById(`goal-item-${key}`);
-        }
+  let targetEl = null;
+  if (this.bossState.active) targetEl = document.getElementById('boss-target');
+  else targetEl = document.getElementById(`goal-item-${key}`);
+  if (!targetEl) return;
 
-        if (!targetEl) return;
+  const targetRect = targetEl.getBoundingClientRect();
 
-        const targetRect = targetEl.getBoundingClientRect();
+  const flyer = this._acquireFlyer(emoji);
 
-        const flyer = document.createElement('div');
-        flyer.classList.add('flying-item');
-        
-        flyer.style.position = 'fixed';
-        flyer.style.zIndex = '9999';
-        flyer.style.pointerEvents = 'none';
-        // MUDANÇA AQUI: Mais lento (1.2s) e curva mais "pesada" (começa lento, acelera)
-        flyer.style.transition = 'all 1.2s cubic-bezier(0.25, 0.1, 0.25, 1.0)';
-        flyer.style.transformOrigin = 'center';
-        
-        flyer.innerText = emoji;
-        
-        // MUDANÇA AQUI: Começa bem maior
-        flyer.style.transform = 'scale(1.5)';
-        
-        flyer.style.left = `${startRect.left + startRect.width/4}px`; 
-        flyer.style.top = `${startRect.top + startRect.height/4}px`;
-        
-        document.body.appendChild(flyer);
+  // garante no DOM
+  if (!flyer.parentNode) document.body.appendChild(flyer);
 
-        // Força o reflow para garantir que a posição inicial seja renderizada
-        flyer.getBoundingClientRect();
+  // Origem e destino (mesma lógica)
+  const startX = startRect.left + startRect.width / 4;
+  const startY = startRect.top + startRect.height / 4;
 
-        requestAnimationFrame(() => {
-            const destX = targetRect.left + targetRect.width/2 - 20; 
-            const destY = targetRect.top + targetRect.height/2 - 20;
+  const destX = targetRect.left + targetRect.width / 2 - 20;
+  const destY = targetRect.top + targetRect.height / 2 - 20;
 
-            flyer.style.left = `${destX}px`;
-            flyer.style.top = `${destY}px`;
-            // MUDANÇA AQUI: Termina um pouco maior que antes (0.8 em vez de 0.5)
-            flyer.style.transform = 'scale(0.8)'; 
-        });
+  // “Arco” (um ponto no meio, elevando um pouco)
+  const midX = (startX + destX) * 0.5;
+  const lift = Math.max(60, Math.min(140, Math.abs(destX - startX) * 0.15));
+  const midY = (startY + destY) * 0.5 - lift;
 
-        // Tempo sincronizado com a nova duração da transição (1200ms)
-        setTimeout(() => {
-            flyer.remove();
-            targetEl.classList.remove('target-pop'); 
-            void targetEl.offsetWidth; 
-            targetEl.classList.add('target-pop'); 
-        }, 1200); 
-    }
+  // Visual: aparece rápido e voa com leve giro
+  flyer.style.opacity = '1';
+
+  // Se houver animação anterior nesse flyer, cancela
+  const prevAnim = this._flyerAnimCancel.get(flyer);
+  if (prevAnim && prevAnim.cancel) prevAnim.cancel();
+
+  // Preferir WAAPI (melhor pra keyframes e arco)
+  if (flyer.animate) {
+    const duration = 950; // mais rápido que 1.2s (sente mais “snappy”), ajuste se quiser
+
+    const anim = flyer.animate(
+      [
+        { transform: `translate3d(${startX}px, ${startY}px, 0) scale(1.6) rotate(-10deg)`, opacity: 1 },
+        { transform: `translate3d(${midX}px, ${midY}px, 0) scale(1.15) rotate(10deg)`, opacity: 1 },
+        { transform: `translate3d(${destX}px, ${destY}px, 0) scale(0.95) rotate(0deg)`, opacity: 0.95 }
+      ],
+      {
+        duration,
+        easing: 'cubic-bezier(0.22, 1, 0.36, 1)', // ease-out “premium”
+        fill: 'forwards'
+      }
+    );
+
+    this._flyerAnimCancel.set(flyer, anim);
+
+    anim.onfinish = () => {
+      // remove flyer e dá o “pop” no target sem reflow
+      this._releaseFlyer(flyer);
+
+      targetEl.classList.remove('target-pop');
+      requestAnimationFrame(() => targetEl.classList.add('target-pop'));
+    };
+
+    // fallback de segurança caso onfinish não dispare (raro)
+    setTimeout(() => {
+      if (this._flyerPoolBusy.has(flyer)) {
+        this._releaseFlyer(flyer);
+        targetEl.classList.remove('target-pop');
+        requestAnimationFrame(() => targetEl.classList.add('target-pop'));
+      }
+    }, duration + 80);
+
+    return;
+  }
+
+  // Fallback (caso animate não exista): versão transform + transition
+  flyer.style.transition = 'transform 0.95s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.95s cubic-bezier(0.22, 1, 0.36, 1)';
+  flyer.style.transform = `translate3d(${startX}px, ${startY}px, 0) scale(1.6) rotate(-10deg)`;
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      flyer.style.transform = `translate3d(${destX}px, ${destY}px, 0) scale(0.95) rotate(0deg)`;
+      flyer.style.opacity = '0.95';
+    });
+  });
+
+  setTimeout(() => {
+    this._releaseFlyer(flyer);
+    targetEl.classList.remove('target-pop');
+    requestAnimationFrame(() => targetEl.classList.add('target-pop'));
+  }, 1030);
+}
+
+
 	
 	ensureBoardClickDelegation() {
   if (this._boardClickDelegationInstalled) return;
@@ -2133,58 +2268,99 @@ renderCell(div, cellData) {
     }
 
     updateGhostPreview(clone, boardRect, cellSize, piece) {
-        this.clearGhostPreview();
-        // Limpa brilhos antigos se não houver snap válido ainda
-        this.clearPredictionHighlights(); 
+    const cloneRect = clone.getBoundingClientRect();
+    const GAP = 4;
+    const PADDING = 8;
 
-        const cloneRect = clone.getBoundingClientRect();
-        const GAP = 4; const PADDING = 8;  
-        
-        const relativeX = (cloneRect.left + cloneRect.width / 2) - (boardRect.left + PADDING);
-        const relativeY = (cloneRect.top + cloneRect.height / 2) - (boardRect.top + PADDING);
-        
-        const effectiveSize = cellSize + GAP;
-        
-        const exactCol = (relativeX / effectiveSize) - (piece.matrix[0].length / 2);
-        const exactRow = (relativeY / effectiveSize) - (piece.matrix.length / 2);
-        
-        const baseR = Math.round(exactRow);
-        const baseC = Math.round(exactCol);
+    const relativeX = (cloneRect.left + cloneRect.width / 2) - (boardRect.left + PADDING);
+    const relativeY = (cloneRect.top + cloneRect.height / 2) - (boardRect.top + PADDING);
 
-        const candidates = [{ r: baseR, c: baseC }, { r: baseR + 1, c: baseC }, { r: baseR - 1, c: baseC }, { r: baseR, c: baseC + 1 }, { r: baseR, c: baseC - 1 }];
-        let bestMatch = null; let minDistance = Infinity;
+    const effectiveSize = cellSize + GAP;
 
-        for (const cand of candidates) {
-            const isValid = this.canPlace(cand.r, cand.c, piece);
-            const dist = Math.sqrt(Math.pow(cand.r - exactRow, 2) + Math.pow(cand.c - exactCol, 2));
-            if (isValid) {
-                if (!bestMatch || !bestMatch.valid || dist < minDistance) {
-                    bestMatch = { r: cand.r, c: cand.c, valid: true };
-                    minDistance = dist;
-                }
-            } else if (!bestMatch && dist < 0.6) { 
-                bestMatch = { r: cand.r, c: cand.c, valid: false };
+    const exactCol = (relativeX / effectiveSize) - (piece.matrix[0].length / 2);
+    const exactRow = (relativeY / effectiveSize) - (piece.matrix.length / 2);
+
+    const baseR = Math.round(exactRow);
+    const baseC = Math.round(exactCol);
+
+    // Mantém o mesmo conjunto de candidatos (mesma jogabilidade)
+    const candidates = [
+        { r: baseR,     c: baseC     },
+        { r: baseR + 1, c: baseC     },
+        { r: baseR - 1, c: baseC     },
+        { r: baseR,     c: baseC + 1 },
+        { r: baseR,     c: baseC - 1 }
+    ];
+
+    let bestMatch = null;
+    let minDist2 = Infinity; // distância ao quadrado
+
+    for (const cand of candidates) {
+        const dr = cand.r - exactRow;
+        const dc = cand.c - exactCol;
+        const dist2 = (dr * dr) + (dc * dc);
+
+        const isValid = this.canPlace(cand.r, cand.c, piece);
+
+        if (isValid) {
+            if (!bestMatch || !bestMatch.valid || dist2 < minDist2) {
+                bestMatch = { r: cand.r, c: cand.c, valid: true };
+                minDist2 = dist2;
             }
-        }
-
-        if (bestMatch) {
-            this.activeSnap = bestMatch;
-            this.drawGhost(bestMatch.r, bestMatch.c, piece, bestMatch.valid);
-
-            // --- NOVO CÓDIGO AQUI ---
-            // Se o encaixe é válido, verifique se vai completar linha!
-            if (bestMatch.valid) {
-                const prediction = this.predictClears(bestMatch.r, bestMatch.c, piece);
-                if (prediction.rows.length > 0 || prediction.cols.length > 0) {
-                    this.drawPredictionHighlights(prediction);
-                }
-            }
-            // ------------------------
-
-        } else {
-            this.activeSnap = null;
+        } else if (!bestMatch && dist2 < (0.6 * 0.6)) {
+            // Mesmo limiar visual de antes (0.6), só que ao quadrado
+            bestMatch = { r: cand.r, c: cand.c, valid: false };
+            // não precisa setar minDist2 aqui (não é usado para inválido)
         }
     }
+
+    // Se não há match, só limpa quando antes havia algo (evita trabalho repetido)
+    if (!bestMatch) {
+        if (this.activeSnap !== null) {
+            this.activeSnap = null;
+            this.clearGhostPreview();
+            this.clearPredictionHighlights();
+            this._lastGhostKey = null;
+            this._lastPredKey = null;
+        }
+        return;
+    }
+
+    // Chave do snap (inclui valid) — se não mudou, não redesenha
+    const ghostKey = `${bestMatch.r},${bestMatch.c},${bestMatch.valid ? 1 : 0}`;
+
+    if (this._lastGhostKey === ghostKey) {
+        // Nada mudou: mantém ghost/predição do jeito que já está
+        this.activeSnap = bestMatch;
+        return;
+    }
+
+    // Mudou: agora sim limpamos e redesenhamos
+    this._lastGhostKey = ghostKey;
+    this.activeSnap = bestMatch;
+
+    this.clearGhostPreview();
+    this.clearPredictionHighlights();
+
+    this.drawGhost(bestMatch.r, bestMatch.c, piece, bestMatch.valid);
+
+    // Predição: só quando válido e quando a posição mudou
+    if (bestMatch.valid) {
+        const predKey = `${bestMatch.r},${bestMatch.c}`;
+        if (this._lastPredKey !== predKey) {
+            this._lastPredKey = predKey;
+
+            const prediction = this.predictClears(bestMatch.r, bestMatch.c, piece);
+            if ((prediction.rows && prediction.rows.length > 0) || (prediction.cols && prediction.cols.length > 0)) {
+                this.drawPredictionHighlights(prediction);
+            }
+        }
+    } else {
+        // Se virou inválido, resetamos a predição
+        this._lastPredKey = null;
+    }
+}
+
     
     // --- PREVISÃO DE LINHAS (EFEITO DOURADO) ---
 
@@ -2278,22 +2454,45 @@ renderCell(div, cellData) {
     }
 
     drawGhost(r, c, piece, isValid) {
-        const className = isValid ? 'ghost-valid' : 'ghost-invalid';
-        for (let i = 0; i < piece.layout.length; i++) {
-            for (let j = 0; j < piece.layout[i].length; j++) {
-                if (piece.layout[i][j]) {
-                    const targetR = r + i;
-                    const targetC = c + j;
-                    if (targetR >= 0 && targetR < this.gridSize && targetC >= 0 && targetC < this.gridSize) {
-                        const idx = targetR * 8 + targetC;
-                        const cell = this.boardEl.children[idx];
-                        if (cell) cell.classList.add('ghost', className);
-                    }
+    const className = isValid ? 'ghost-valid' : 'ghost-invalid';
+
+    // Inicializa cache de índices usados pelo ghost (se não existir)
+    if (!this._ghostIdxs) this._ghostIdxs = [];
+
+    for (let i = 0; i < piece.layout.length; i++) {
+        for (let j = 0; j < piece.layout[i].length; j++) {
+            if (!piece.layout[i][j]) continue;
+
+            const targetR = r + i;
+            const targetC = c + j;
+
+            if (targetR >= 0 && targetR < this.gridSize && targetC >= 0 && targetC < this.gridSize) {
+                const idx = targetR * 8 + targetC;
+                const cell = this.boardEl.children[idx];
+                if (cell) {
+                    cell.classList.add('ghost', className);
+                    this._ghostIdxs.push(idx); // ✅ registra pra limpar depois
                 }
             }
         }
     }
-    clearGhostPreview() { this.boardEl.querySelectorAll('.ghost').forEach(el => el.classList.remove('ghost', 'ghost-valid', 'ghost-invalid')); }
+}
+
+clearGhostPreview() {
+    // Se não há ghost anterior, não faz nada
+    const idxs = this._ghostIdxs;
+    if (!idxs || idxs.length === 0) return;
+
+    // Remove classes apenas dos elementos que foram marcados
+    for (let k = 0; k < idxs.length; k++) {
+        const cell = this.boardEl.children[idxs[k]];
+        if (cell) cell.classList.remove('ghost', 'ghost-valid', 'ghost-invalid');
+    }
+
+    // Limpa lista (sem alocar nova)
+    idxs.length = 0;
+}
+
 
     canPlace(r, c, piece) {
         for (let i = 0; i < piece.layout.length; i++) {
@@ -2649,22 +2848,43 @@ renderCell(div, cellData) {
     }
 
     checkMovesAvailable() {
-        if(!this.dockEl) return true;
-        const remainingPiecesEls = this.dockEl.querySelectorAll('.draggable-piece');
-        if (remainingPiecesEls.length === 0) return true;
+    // Se não tem dock, assume que está tudo ok (mantém seu comportamento)
+    if (!this.dockEl) return true;
 
-        for (const el of remainingPiecesEls) {
-            const index = el.dataset.index;
-            const piece = this.currentHand[index];
-            if (!piece) continue;
-            for (let r = 0; r < this.gridSize; r++) {
-                for (let c = 0; c < this.gridSize; c++) {
-                    if (this.canPlace(r, c, piece)) return true;
-                }
+    // Em vez de ler DOM, usa diretamente a mão atual
+    // Filtra peças existentes na mão (mantém equivalência)
+    const pieces = [];
+    for (let i = 0; i < this.currentHand.length; i++) {
+        const p = this.currentHand[i];
+        if (p) pieces.push(p);
+    }
+    if (pieces.length === 0) return true;
+
+    const N = this.gridSize;
+
+    for (const piece of pieces) {
+        // Dimensões da peça (usa matrix/layout que você já tem)
+        const rows = piece.matrix ? piece.matrix.length : (piece.layout ? piece.layout.length : 0);
+        const cols = piece.matrix && piece.matrix[0] ? piece.matrix[0].length
+                    : (piece.layout && piece.layout[0] ? piece.layout[0].length : 0);
+
+        // Se não tem dimensões válidas, pula
+        if (!rows || !cols) continue;
+
+        // Limita o range onde a peça pode caber (evita testar posições impossíveis)
+        const maxR = N - rows;
+        const maxC = N - cols;
+
+        for (let r = 0; r <= maxR; r++) {
+            for (let c = 0; c <= maxC; c++) {
+                if (this.canPlace(r, c, piece)) return true;
             }
         }
-        return false; 
     }
+
+    return false;
+}
+
 
     gameWon(collectedGoals = {}, earnedRewards = []) {
         this.clearSavedGame();

@@ -5785,3 +5785,23 @@ input:checked + .slider:before { transform: translateX(22px); }
     pointer-events: auto !important;
 }
 
+.flying-item {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 9999;
+  pointer-events: none;
+
+  font-size: 28px;           /* ajuste se quiser */
+  line-height: 1;
+  will-change: transform, opacity;
+  transform-origin: center;
+  
+  /* Glow leve (sem filter) */
+  text-shadow:
+    0 8px 20px rgba(0,0,0,0.35),
+    0 0 18px rgba(255,255,255,0.25);
+}
+
+
+
