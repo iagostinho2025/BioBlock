@@ -1899,133 +1899,185 @@ export class Game {
     }
 
     attachDragEvents(el, piece) {
-        let isDragging = false;
-        let clone = null;
-        let cellPixelSize = 0; 
-        let boardRect = null;
+    let isDragging = false;
+    let clone = null;
+    let cellPixelSize = 0;
+    let boardRect = null;
 
-        const onStart = (e) => {
-            if (this.interactionMode === 'rotate') return;
+    // Cache para evitar leituras repetidas de layout
+    let halfW = 0;
+    let halfH = 0;
 
-            if (isDragging) return;
-            if(this.audio) this.audio.playDrag();
-            isDragging = true; 
-            this.activeSnap = null;
-            
-            boardRect = this.boardEl.getBoundingClientRect();
-            const firstCell = this.boardEl.querySelector('.cell');
-            if (firstCell) {
-                cellPixelSize = firstCell.getBoundingClientRect().width;
-            } else {
-                cellPixelSize = (boardRect.width - 16) / 8;
-            }
-            
-            clone = el.cloneNode(true);
-            clone.classList.add('dragging-active');
-            clone.style.display = 'grid';
-            
-            const cols = piece.matrix[0].length;
-            const rows = piece.matrix.length;
-            clone.style.width = (cols * cellPixelSize) + 'px';
-            clone.style.height = (rows * cellPixelSize) + 'px';
-            clone.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-            clone.style.gridTemplateRows = `repeat(${rows}, 1fr)`; 
-            clone.style.gap = '4px'; 
-            
-            const touch = e.touches ? e.touches[0] : e;
-            this.moveClone(clone, touch.clientX, touch.clientY);
-            document.body.appendChild(clone);
-            el.style.opacity = '0'; 
-        };
+    // rAF throttle para reduzir custo do onMove
+    let rafId = 0;
+    let lastClientX = 0;
+    let lastClientY = 0;
 
-        const onMove = (e) => {
-            if (!isDragging || !clone) return;
-            e.preventDefault(); 
-            const touch = e.touches ? e.touches[0] : e;
-            this.moveClone(clone, touch.clientX, touch.clientY);
+    const onStart = (e) => {
+        if (this.interactionMode === 'rotate') return;
+        if (isDragging) return;
+
+        if (this.audio) this.audio.playDrag();
+        isDragging = true;
+        this.activeSnap = null;
+
+        boardRect = this.boardEl.getBoundingClientRect();
+
+        const firstCell = this.boardEl.querySelector('.cell');
+        if (firstCell) {
+            cellPixelSize = firstCell.getBoundingClientRect().width;
+        } else {
+            cellPixelSize = (boardRect.width - 16) / 8;
+        }
+
+        clone = el.cloneNode(true);
+        clone.classList.add('dragging-active');
+        clone.style.display = 'grid';
+
+        const cols = piece.matrix[0].length;
+        const rows = piece.matrix.length;
+        clone.style.width = (cols * cellPixelSize) + 'px';
+        clone.style.height = (rows * cellPixelSize) + 'px';
+        clone.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+        clone.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+        clone.style.gap = '4px';
+
+        // IMPORTANTE: append antes de medir, pra offsetWidth/Height serem confiáveis
+        document.body.appendChild(clone);
+
+        // Cache das metades (evita offsetWidth/Height no move)
+        halfW = clone.offsetWidth / 2;
+        halfH = clone.offsetHeight / 2;
+
+        const touch = e.touches ? e.touches[0] : e;
+        lastClientX = touch.clientX;
+        lastClientY = touch.clientY;
+
+        // Move inicial (mantém seu moveClone, mas sem custo repetido)
+        // Aqui replicamos a lógica do moveClone com halfW/halfH cacheados.
+        // Não usamos transform para não conflitar com o CSS scale.
+        const VISUAL_OFFSET_Y = 80;
+        clone.style.left = (lastClientX - halfW) + 'px';
+        clone.style.top = (lastClientY - halfH - VISUAL_OFFSET_Y) + 'px';
+
+        // Ghost inicial
+        this.updateGhostPreview(clone, boardRect, cellPixelSize, piece);
+
+        el.style.opacity = '0';
+    };
+
+    const onMove = (e) => {
+        if (!isDragging || !clone) return;
+
+        // Evita scroll no mobile
+        if (e.cancelable) e.preventDefault();
+
+        const touch = e.touches ? e.touches[0] : e;
+        lastClientX = touch.clientX;
+        lastClientY = touch.clientY;
+
+        // Throttle via rAF
+        if (rafId) return;
+        rafId = requestAnimationFrame(() => {
+            rafId = 0;
+
+            // Move (mesma lógica do moveClone, sem reler offsetWidth/Height)
+            const VISUAL_OFFSET_Y = 80;
+            clone.style.left = (lastClientX - halfW) + 'px';
+            clone.style.top = (lastClientY - halfH - VISUAL_OFFSET_Y) + 'px';
+
             this.updateGhostPreview(clone, boardRect, cellPixelSize, piece);
-        };
+        });
+    };
 
-        const onEnd = (e) => {
-            if (!isDragging) return;
-            this.clearPredictionHighlights();
-            isDragging = false;
-            const touch = e.changedTouches ? e.changedTouches[0] : e;
-            const dropX = touch.clientX; const dropY = touch.clientY;
-            
-            let placed = false;
-            if (this.activeSnap && this.activeSnap.valid) {
-                placed = this.placePiece(this.activeSnap.r, this.activeSnap.c, piece);
+    const onEnd = (e) => {
+        if (!isDragging) return;
+
+        // Para qualquer frame pendente
+        if (rafId) {
+            cancelAnimationFrame(rafId);
+            rafId = 0;
+        }
+
+        this.clearPredictionHighlights();
+        isDragging = false;
+
+        const touch = e.changedTouches ? e.changedTouches[0] : e;
+        const dropX = touch.clientX;
+        const dropY = touch.clientY;
+
+        let placed = false;
+        if (this.activeSnap && this.activeSnap.valid) {
+            placed = this.placePiece(this.activeSnap.r, this.activeSnap.c, piece);
+        }
+
+        if (placed) {
+            if (this.audio) {
+                this.audio.playDrop();
+                this.audio.vibrate(20);
             }
 
-            if (placed) {
-                if(this.audio) {
-                    this.audio.playDrop(); 
-                    this.audio.vibrate(20);
-                }
-                
-                el.remove(); 
-                
-                // Remove da memória
-                const index = parseInt(el.dataset.index);
-                if (!isNaN(index)) {
-                    this.currentHand[index] = null; 
-                }
+            el.remove();
 
-                let hasWon = false; 
+            // Remove da memória
+            const index = parseInt(el.dataset.index);
+            if (!isNaN(index)) {
+                this.currentHand[index] = null;
+            }
 
-                try {
-                    const damageDealt = this.checkLines(dropX, dropY); 
-                    
-                    if (this.currentMode === 'adventure') {
-                        if (this.bossState.active) {
-                            this.processBossTurn(damageDealt);
-                            if (this.bossState.currentHp <= 0) hasWon = true; 
-                        } else {
-                            hasWon = this.checkVictoryConditions();
-                        }
+            let hasWon = false;
+
+            try {
+                const damageDealt = this.checkLines(dropX, dropY);
+
+                if (this.currentMode === 'adventure') {
+                    if (this.bossState.active) {
+                        this.processBossTurn(damageDealt);
+                        if (this.bossState.currentHp <= 0) hasWon = true;
                     } else {
                         hasWon = this.checkVictoryConditions();
                     }
-                } catch(e) { console.error(e); }
-
-                if (this.bossState.active && !hasWon) {
-                    const bossId = this.currentLevelConfig.boss?.id;
-                    
-                    if (BOSS_LOGIC && BOSS_LOGIC[bossId] && BOSS_LOGIC[bossId].onTurnEnd) {
-                        BOSS_LOGIC[bossId].onTurnEnd(this);
-                    }
+                } else {
+                    hasWon = this.checkVictoryConditions();
                 }
+            } catch (e) { console.error(e); }
 
-                if (!hasWon) {
-                    const remainingPieces = this.dockEl.querySelectorAll('.draggable-piece');
-                    
-                    // Se acabaram as peças, gera novas (o save ocorrerá dentro do spawnNewHand)
-                    if (remainingPieces.length === 0) {
-                        this.spawnNewHand();
-                    } else {
-                        // Se ainda tem peças, SALVA O ESTADO ATUAL (Tabuleiro atualizado + Peça removida da mão)
-                        this.saveGameState();
-
-                        if (!this.checkMovesAvailable()) this.gameOver();
-                    }
+            if (this.bossState.active && !hasWon) {
+                const bossId = this.currentLevelConfig.boss?.id;
+                if (BOSS_LOGIC && BOSS_LOGIC[bossId] && BOSS_LOGIC[bossId].onTurnEnd) {
+                    BOSS_LOGIC[bossId].onTurnEnd(this);
                 }
-            } else {
-                el.style.opacity = '1';
             }
-            
-            if (clone) clone.remove();
-            this.clearGhostPreview();
-            this.activeSnap = null;
-        };
-        
-        el.addEventListener('mousedown', onStart);
-        el.addEventListener('touchstart', onStart, {passive: false});
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('touchmove', onMove, {passive: false});
-        window.addEventListener('mouseup', onEnd);
-        window.addEventListener('touchend', onEnd);
-    }
+
+            if (!hasWon) {
+                const remainingPieces = this.dockEl.querySelectorAll('.draggable-piece');
+
+                if (remainingPieces.length === 0) {
+                    this.spawnNewHand();
+                } else {
+                    this.saveGameState();
+                    if (!this.checkMovesAvailable()) this.gameOver();
+                }
+            }
+        } else {
+            el.style.opacity = '1';
+        }
+
+        if (clone) clone.remove();
+        this.clearGhostPreview();
+        this.activeSnap = null;
+    };
+
+    el.addEventListener('mousedown', onStart);
+    el.addEventListener('touchstart', onStart, { passive: false });
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('touchmove', onMove, { passive: false });
+
+    window.addEventListener('mouseup', onEnd);
+    window.addEventListener('touchend', onEnd);
+}
+
     
     moveClone(clone, clientX, clientY) {
         const VISUAL_OFFSET_Y = 80;
