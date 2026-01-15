@@ -237,7 +237,24 @@ export class AudioSystem {
         noise.start();
     }
 
-    vibrate(pattern) { 
-        if (navigator.vibrate) navigator.vibrate(pattern);
+    vibrate(pattern) {
+    if (!navigator.vibrate) return;
+
+    const now = performance.now();
+    if (!this._lastVibrateTime) this._lastVibrateTime = 0;
+
+    const COOLDOWN = 120;
+    if (now - this._lastVibrateTime < COOLDOWN) return;
+    this._lastVibrateTime = now;
+
+    // Limita duração máxima
+    if (Array.isArray(pattern)) {
+        pattern = pattern.map(v => Math.min(v, 200));
+    } else {
+        pattern = Math.min(pattern, 200);
     }
+
+    navigator.vibrate(pattern);
+}
+
 }

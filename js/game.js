@@ -424,56 +424,61 @@ flushSaveGameState() {
     }
 
     restoreGameState(targetLevelId) {
-        const raw = localStorage.getItem('blocklands_savestate');
-        if (!raw) return false;
+    const raw = localStorage.getItem('blocklands_savestate');
+    if (!raw) return false;
 
-        try {
-            const state = JSON.parse(raw);
-            
-            // Segurança: Só carrega se o save for do mesmo nível que estamos tentando abrir
-            if (state.levelId !== targetLevelId) return false;
+    try {
+        const state = JSON.parse(raw);
 
-            // Restaura os dados
-            this.grid = state.grid;
-            this.score = state.score;
-            this.currentHand = state.hand;
-            this.bossState = state.bossState;
-            this.heroState = state.heroState;
-            this.currentGoals = state.currentGoals;
-            this.collected = state.collected;
-            this.comboState = state.comboState || { count: 0, lastClearTime: 0 };
-            
-            // Recarrega Powerups (caso tenha gasto e não atualizado)
-            if (state.powerUps) {
-                this.powerUps = state.powerUps;
-                this.savePowerUps(); // Sincroniza com o storage de powerups global
-            }
+        // Segurança: Só carrega se o save for do mesmo nível que estamos tentando abrir
+        if (state.levelId !== targetLevelId) return false;
 
-            // Atualiza a UI Visualmente
-this.renderGrid();
-this.renderDock();
-this.renderControlsUI(); // Atualiza botões de herói/powerup
+        // Restaura os dados
+        this.grid = state.grid;
+        this.score = state.score;
+        this.currentHand = state.hand;
+        this.bossState = state.bossState;
+        this.heroState = state.heroState;
+        this.currentGoals = state.currentGoals;
+        this.collected = state.collected;
+        this.comboState = state.comboState || { count: 0, lastClearTime: 0 };
 
-if (this.bossState.active) {
-    this.setupBossUI(this.currentLevelConfig.boss); // Recria a estrutura HTML
-    this.updateBossUI(); // Atualiza a vida
-} else {
-    // Recria a UI dos goals (isso zera this.collected internamente)
-    this.setupGoalsUI(this.currentGoals);
+        // ✅ IMPORTANTÍSSIMO: o grid foi trocado, então o cache de vazios ficou inválido
+        this._emptyCells = null;
+        this._emptyCellsDirty = true;
 
-    // REAPLICA o progresso salvo
-    this.collected = state.collected || this.collected;
+        // Recarrega Powerups (caso tenha gasto e não atualizado)
+        if (state.powerUps) {
+            this.powerUps = state.powerUps;
+            this.savePowerUps(); // Sincroniza com o storage de powerups global
+        }
 
-    // Atualiza números/estado completado na UI
-    this.updateGoalsUI();
+        // Atualiza a UI Visualmente
+        this.renderGrid();
+        this.renderDock();
+        this.renderControlsUI(); // Atualiza botões de herói/powerup
+
+        if (this.bossState.active) {
+            this.setupBossUI(this.currentLevelConfig.boss); // Recria a estrutura HTML
+            this.updateBossUI(); // Atualiza a vida
+        } else {
+            // Recria a UI dos goals (isso zera this.collected internamente)
+            this.setupGoalsUI(this.currentGoals);
+
+            // REAPLICA o progresso salvo
+            this.collected = state.collected || this.collected;
+
+            // Atualiza números/estado completado na UI
+            this.updateGoalsUI();
+        }
+
+        return true; // Sucesso
+    } catch (e) {
+        console.error('Erro ao carregar save:', e);
+        return false;
+    }
 }
 
-            return true; // Sucesso
-        } catch (e) {
-            console.error('Erro ao carregar save:', e);
-            return false;
-        }
-    }
 
     clearSavedGame() {
     this.cancelPendingSaveGameState();
@@ -972,102 +977,195 @@ if (this.bossState.active) {
     }
 	
 	renderControlsUI() {
-        const oldPwr = document.getElementById('powerups-area');
-        if (oldPwr) oldPwr.style.display = 'none';
-        const oldHeroes = document.getElementById('hero-powers-area');
-        if (oldHeroes) oldHeroes.remove();
-        
-        let controlsContainer = document.getElementById('controls-bar');
-        
-        if (!controlsContainer) {
-            controlsContainer = document.createElement('div');
-            controlsContainer.id = 'controls-bar';
-            controlsContainer.className = 'controls-bar';
-            if (this.dockEl && this.dockEl.parentNode) {
-                this.dockEl.parentNode.insertBefore(controlsContainer, this.dockEl.nextSibling);
-            }
-        }
-        controlsContainer.innerHTML = '';
+    // Mantém compatibilidade com UI antiga
+    const oldPwr = document.getElementById('powerups-area');
+    if (oldPwr) oldPwr.style.display = 'none';
+    const oldHeroes = document.getElementById('hero-powers-area');
+    if (oldHeroes) oldHeroes.remove();
 
-        // GRUPO ESQUERDA: Itens
+    // Garante container
+    let controlsContainer = document.getElementById('controls-bar');
+    if (!controlsContainer) {
+        controlsContainer = document.createElement('div');
+        controlsContainer.id = 'controls-bar';
+        controlsContainer.className = 'controls-bar';
+        if (this.dockEl && this.dockEl.parentNode) {
+            this.dockEl.parentNode.insertBefore(controlsContainer, this.dockEl.nextSibling);
+        } else {
+            document.body.appendChild(controlsContainer);
+        }
+    }
+
+    // Cria grupos uma vez
+    if (!this._controlsUI) {
         const leftGroup = document.createElement('div');
         leftGroup.className = 'controls-group';
-        
-        [{ id: 'magnet', icon: '🧲' }, { id: 'rotate', icon: '🔄' }, { id: 'swap', icon: '🔀' }].forEach(p => {
+        leftGroup.id = 'controls-left-group';
+
+        const rightGroup = document.createElement('div');
+        rightGroup.className = 'controls-group';
+        rightGroup.id = 'controls-right-group';
+
+        controlsContainer.innerHTML = '';
+        controlsContainer.appendChild(leftGroup);
+        controlsContainer.appendChild(rightGroup);
+
+        // Cache refs
+        this._controlsUI = {
+            container: controlsContainer,
+            leftGroup,
+            rightGroup,
+            pwrBtns: new Map(), // id -> button
+            heroSignature: null // string para saber quando precisa recriar heróis
+        };
+
+        // Cria botões de powerup uma vez (estrutura estável)
+        const pwrList = [
+            { id: 'magnet', icon: '🧲' },
+            { id: 'rotate', icon: '🔄' },
+            { id: 'swap',   icon: '🔀' }
+        ];
+
+        for (const p of pwrList) {
             const btn = document.createElement('button');
             btn.className = `ctrl-btn pwr-${p.id}`;
             btn.id = `btn-pwr-${p.id}`;
-            const count = this.powerUps[p.id] || 0;
-            btn.innerHTML = `${p.icon}<span class="ctrl-count">${count}</span>`;
-            
-            if (count <= 0) btn.classList.add('disabled');
-            btn.onclick = () => this.activatePowerUp(p.id);
-            leftGroup.appendChild(btn);
-        });
+            btn.type = 'button';
 
-        // GRUPO DIREITA: Heróis
-        const rightGroup = document.createElement('div');
-        rightGroup.className = 'controls-group';
+            // Estrutura interna fixa: ícone + count
+            const iconSpan = document.createElement('span');
+            iconSpan.className = 'ctrl-icon';
+            iconSpan.textContent = p.icon;
+
+            const countSpan = document.createElement('span');
+            countSpan.className = 'ctrl-count';
+            countSpan.textContent = '0';
+
+            btn.appendChild(iconSpan);
+            btn.appendChild(countSpan);
+
+            // Handler estável (não recria)
+            btn.addEventListener('click', () => this.activatePowerUp(p.id));
+
+            this._controlsUI.leftGroup.appendChild(btn);
+            this._controlsUI.pwrBtns.set(p.id, btn);
+        }
+    }
+
+    // Atualiza contagem/disabled dos powerups (barato)
+    for (const [id, btn] of this._controlsUI.pwrBtns.entries()) {
+        const count = (this.powerUps && this.powerUps[id]) ? this.powerUps[id] : 0;
+        const countEl = btn.querySelector('.ctrl-count');
+        if (countEl) countEl.textContent = String(count);
+
+        if (count <= 0) btn.classList.add('disabled');
+        else btn.classList.remove('disabled');
+    }
+
+    // ---- Heróis: recria somente se necessário ----
+    // A lista de heróis depende do modo e da classe do player.
+    const mode = this.currentMode || '';
+    const cls = this.playerClass || '';
+    const boss = (this.currentLevelConfig && this.currentLevelConfig.type) ? this.currentLevelConfig.type : '';
+    const heroSignature = `${mode}|${cls}|${boss}`;
+
+    if (this._controlsUI.heroSignature !== heroSignature) {
+        this._controlsUI.heroSignature = heroSignature;
+
+        const rightGroup = this._controlsUI.rightGroup;
+        rightGroup.innerHTML = '';
 
         if (this.currentMode === 'adventure') {
-            // Lista base de companheiros
             const heroes = [
-                { id: 'thalion', icon: '🧝‍♂️' }, 
+                { id: 'thalion', icon: '🧝‍♂️' },
                 { id: 'nyx',     icon: '🐺' }
             ];
 
-            // Adiciona APENAS o herói escolhido pelo jogador
-            if (this.playerClass === 'mage') {
-                heroes.push({ id: 'mage', icon: '🧙‍♀️' });
-            } else {
-                // Padrão é guerreiro se não tiver classe (ou se for warrior)
-                heroes.push({ id: 'player', icon: '⚔️' });
-            }
+            if (this.playerClass === 'mage') heroes.push({ id: 'mage', icon: '🧙‍♀️' });
+            else heroes.push({ id: 'player', icon: '⚔️' });
 
-            heroes.forEach(h => {
+            for (const h of heroes) {
                 const btn = document.createElement('div');
                 btn.className = 'ctrl-btn hero locked';
                 btn.id = `btn-hero-${h.id}`;
-                btn.innerHTML = `${h.icon}`;
-                btn.onclick = () => this.activateHeroPower(h.id);
-                rightGroup.appendChild(btn);
-            });
-        }
+                btn.textContent = h.icon;
 
-        controlsContainer.appendChild(leftGroup);
-        controlsContainer.appendChild(rightGroup);
-        this.updateControlsVisuals();
+                // Handler estável (por criação do botão)
+                btn.addEventListener('click', () => this.activateHeroPower(h.id));
+
+                rightGroup.appendChild(btn);
+            }
+        }
     }
+
+    // Mantém seu pipeline de atualização visual
+    this.updateControlsVisuals();
+}
+
 
     updateControlsVisuals() {
-        // PowerUps (AGORA COM MAGNET)
-        ['magnet', 'rotate', 'swap'].forEach(id => {
-            const btn = document.getElementById(`btn-pwr-${id}`);
-            if(!btn) return;
-            btn.classList.remove('active-mode');
-            const count = this.powerUps[id];
-            btn.querySelector('.ctrl-count').innerText = count;
-            if(count <= 0) btn.classList.add('disabled');
-            else btn.classList.remove('disabled');
-            if(this.interactionMode === id) btn.classList.add('active-mode');
-        });
+    // --- PowerUps ---
+    const pwrIds = ['magnet', 'rotate', 'swap'];
 
-        // Heróis
-        if (this.currentMode === 'adventure' && this.heroState) {
-            ['thalion', 'nyx', 'player','mage'].forEach(id => {
-                const btn = document.getElementById(`btn-hero-${id}`);
-                if(!btn) return;
-                btn.className = 'ctrl-btn hero'; 
-                const state = this.heroState[id];
-                
-                if (state.used) btn.classList.add('used');
-                else if (state.unlocked) btn.classList.add('ready');
-                else btn.classList.add('locked');
-                
-                if (this.interactionMode === `hero_${id}`) btn.classList.add('active-mode');
-            });
+    // Usa cache se existir (criado no renderControlsUI)
+    const pwrBtns = this._controlsUI?.pwrBtns;
+
+    for (let i = 0; i < pwrIds.length; i++) {
+        const id = pwrIds[i];
+
+        const btn = pwrBtns ? pwrBtns.get(id) : document.getElementById(`btn-pwr-${id}`);
+        if (!btn) continue;
+
+        const count = (this.powerUps && this.powerUps[id]) ? this.powerUps[id] : 0;
+
+        // Atualiza contador apenas se mudou
+        const countEl = btn.querySelector('.ctrl-count');
+        if (countEl) {
+            const newText = String(count);
+            if (countEl.textContent !== newText) countEl.textContent = newText;
         }
+
+        // Disabled
+        const shouldDisable = count <= 0;
+        btn.classList.toggle('disabled', shouldDisable);
+
+        // Active mode
+        btn.classList.toggle('active-mode', this.interactionMode === id);
     }
+
+    // --- Heróis ---
+    if (this.currentMode !== 'adventure' || !this.heroState) return;
+
+    // Só percorre os heróis que podem existir. (Se não existir o botão, ignora.)
+    const heroIds = ['thalion', 'nyx', 'player', 'mage'];
+
+    for (let i = 0; i < heroIds.length; i++) {
+        const id = heroIds[i];
+        const btn = document.getElementById(`btn-hero-${id}`);
+        if (!btn) continue;
+
+        const state = this.heroState[id];
+        if (!state) continue;
+
+        // Em vez de resetar className, fazemos toggle controlado
+        // Garante base
+        if (!btn.classList.contains('ctrl-btn')) btn.classList.add('ctrl-btn');
+        if (!btn.classList.contains('hero')) btn.classList.add('hero');
+
+        // Estados mutuamente exclusivos
+        const isUsed = !!state.used;
+        const isReady = !isUsed && !!state.unlocked;
+        const isLocked = !isUsed && !state.unlocked;
+
+        btn.classList.toggle('used', isUsed);
+        btn.classList.toggle('ready', isReady);
+        btn.classList.toggle('locked', isLocked);
+
+        // Active mode
+        btn.classList.toggle('active-mode', this.interactionMode === `hero_${id}`);
+    }
+}
+
 	
 
     handleBoardClick(r, c) {
@@ -1515,18 +1613,42 @@ if (this.bossState.active) {
         html += '</div>';
         this.goalsArea.innerHTML = html;
     }
+	
+	beginGoalsBatch() {
+    this._goalsBatchDepth = (this._goalsBatchDepth || 0) + 1;
+    this._goalsDirty = false;
+}
+
+endGoalsBatch() {
+    if (!this._goalsBatchDepth) return;
+    this._goalsBatchDepth--;
+
+    // Só atualiza quando sair do último batch
+    if (this._goalsBatchDepth === 0 && this._goalsDirty) {
+        this._goalsDirty = false;
+        this.updateGoalsUI();
+    }
+}
+
 
     updateGoalsUI() {
-        Object.keys(this.currentGoals).forEach(key => {
-            const el = document.getElementById(`goal-val-${key}`);
-            if(!el) return;
-            const target = this.currentGoals[key];
-            const current = this.collected[key] || 0;
-            el.innerText = `${current}/${target}`;
-            const parent = document.getElementById(`goal-item-${key}`);
-            if (current >= target && parent) parent.classList.add('completed');
-        });
+    if (!this.currentGoals) return;
+
+    for (const key of Object.keys(this.currentGoals)) {
+        const el = document.getElementById(`goal-val-${key}`);
+        if (!el) continue;
+
+        const target = this.currentGoals[key];
+        const current = this.collected[key] || 0;
+
+        const newText = `${current}/${target}`;
+        if (el.textContent !== newText) el.textContent = newText;
+
+        const parent = document.getElementById(`goal-item-${key}`);
+        if (parent && current >= target) parent.classList.add('completed');
     }
+}
+
 
     checkVictoryConditions() {
         if (!this.currentGoals || Object.keys(this.currentGoals).length === 0) return false;
@@ -1608,6 +1730,7 @@ if (this.bossState.active) {
     startAdventureLevel(levelConfig) {
         this.currentMode = 'adventure';
         this.currentLevelConfig = levelConfig;
+		this._saveDisabled = false;
         this.showScreen(this.screenGame);
         
         if (this.audio) {
@@ -1647,21 +1770,25 @@ if (this.bossState.active) {
     }
 
     setupBossUI(bossData) {
-        if(!this.goalsArea) return;
-        
-        // Adicionamos o <span id="boss-hp-text"> dentro da barra
-        this.goalsArea.innerHTML = `
-            <div class="boss-ui-container">
-                <div id="boss-target" class="boss-avatar">${bossData.emoji}</div>
-                <div class="boss-stats">
-                    <div class="boss-name">${bossData.name}</div>
-                    <div class="hp-bar-bg">
-                        <div class="hp-bar-fill" id="boss-hp-bar" style="width: 100%"></div>
-                        <span id="boss-hp-text" class="hp-text">${bossData.maxHp}/${bossData.maxHp}</span>
-                    </div>
+    if (!this.goalsArea) return;
+
+    // Adicionamos o <span id="boss-hp-text"> dentro da barra
+    this.goalsArea.innerHTML = `
+        <div class="boss-ui-container">
+            <div id="boss-target" class="boss-avatar">${bossData.emoji}</div>
+            <div class="boss-stats">
+                <div class="boss-name">${bossData.name}</div>
+                <div class="hp-bar-bg">
+                    <div class="hp-bar-fill" id="boss-hp-bar" style="width: 100%"></div>
+                    <span id="boss-hp-text" class="hp-text">${bossData.maxHp}/${bossData.maxHp}</span>
                 </div>
-            </div>`;
-    }
+            </div>
+        </div>`;
+
+    // ✅ IMPORTANTE: invalida cache de elementos do boss UI
+    this._bossUI = null;
+}
+
 	
 	// --- LÓGICA DE UI DOS HERÓIS ---
 
@@ -1763,10 +1890,18 @@ if (this.bossState.active) {
 
     if (this.audio) this.audio.stopMusic();
 
-    // reabilita save no restart
+    // ✅ cancela qualquer save pendente do ciclo anterior
+    this.cancelPendingSaveGameState();
+
+    // ✅ reabilita save no restart
     this._saveDisabled = false;
 
+    // ✅ invalida cache de vazios (novo jogo / novo grid)
+    this._emptyCells = null;
+    this._emptyCellsDirty = true;
+
     if (this.currentMode === 'adventure' && this.currentLevelConfig) {
+        // Pode ser 0 também, mas 10ms está ok
         setTimeout(() => {
             this.startAdventureLevel(this.currentLevelConfig);
         }, 10);
@@ -1776,47 +1911,53 @@ if (this.bossState.active) {
 }
 
 
+
     resetGame() {
-        this.grid = Array(this.gridSize).fill().map(() => Array(this.gridSize).fill(null));
-        this.score = 0;
-        this.interactionMode = null;
-        this.comboState = { count: 0, lastClearTime: 0 }; 
-        
-        this.heroState = {
-            thalion: { unlocked: false, used: false },
-            nyx: { unlocked: false, used: false },
-            player:  { unlocked: false, used: false, lineCounter: 0 },
-			mage: { unlocked: false, used: false, lineCounter: 0 }
-			
-        };
+    this.grid = Array(this.gridSize).fill().map(() => Array(this.gridSize).fill(null));
+    this.score = 0;
+    this.interactionMode = null;
+    this.comboState = { count: 0, lastClearTime: 0 }; 
+    
+    this.heroState = {
+        thalion: { unlocked: false, used: false },
+        nyx: { unlocked: false, used: false },
+        player:  { unlocked: false, used: false, lineCounter: 0 },
+        mage: { unlocked: false, used: false, lineCounter: 0 }
+    };
 
-        this.bossState.active = (this.currentLevelConfig?.type === 'boss');
-        this.loadPowerUps(); // Carrega o magnet aqui
-        
-        this.renderControlsUI(); 
+    this.bossState.active = (this.currentLevelConfig?.type === 'boss');
+    this.loadPowerUps(); // Carrega o magnet aqui
+    
+    this.renderControlsUI(); 
 
-        if(!this.bossState.active) {
-            const goals = (this.currentMode === 'casual') ? { bee: 10, ghost: 10, cop: 10 } : this.currentGoals;
-            this.setupGoalsUI(goals); 
-        } else {
-            this.bossState.currentHp = this.bossState.maxHp;
-            this.updateBossUI();
-        }
-
-        if (this.currentMode === 'adventure' && this.currentLevelConfig?.gridConfig) {
-            this.currentLevelConfig.gridConfig.forEach(cfg => {
-                if(this.grid[cfg.r]) {
-                    this.grid[cfg.r][cfg.c] = { 
-                        type: cfg.type, 
-                        key: cfg.key, 
-                        emoji: cfg.emoji 
-                    }; 
-                }
-            });
-        }
-        this.renderGrid();
-        this.spawnNewHand();
+    if(!this.bossState.active) {
+        const goals = (this.currentMode === 'casual') ? { bee: 10, ghost: 10, cop: 10 } : this.currentGoals;
+        this.setupGoalsUI(goals); 
+    } else {
+        this.bossState.currentHp = this.bossState.maxHp;
+        this.updateBossUI();
     }
+
+    if (this.currentMode === 'adventure' && this.currentLevelConfig?.gridConfig) {
+        this.currentLevelConfig.gridConfig.forEach(cfg => {
+            if(this.grid[cfg.r]) {
+                this.grid[cfg.r][cfg.c] = { 
+                    type: cfg.type, 
+                    key: cfg.key, 
+                    emoji: cfg.emoji 
+                }; 
+            }
+        });
+    }
+
+    // ✅ Grid foi recriado/alterado: invalida cache de vazios
+    this._emptyCells = null;
+    this._emptyCellsDirty = true;
+
+    this.renderGrid();
+    this.spawnNewHand();
+}
+
 
     // --- EFEITO VISUAL: Partículas ---
     spawnExplosion(rect, colorClass) {
@@ -2032,6 +2173,7 @@ renderCell(div, cellData) {
     for (let c = 0; c < this.gridSize; c++) {
       const div = this._boardCells[r * this.gridSize + c];
       this.renderCell(div, this.grid[r][c]);
+	  this._emptyCellsDirty = true;
     }
   }
 }
@@ -2676,6 +2818,7 @@ clearGhostPreview() {
                 }
             }
         }
+		this._emptyCellsDirty = true;
         return true;
     }
 
@@ -2739,8 +2882,10 @@ clearGhostPreview() {
     colsToClear.forEach(c => { for (let r = 0; r < this.gridSize; r++) addVisual(r, c); });
 
     // 3. LIMPEZA LÓGICA (Acontece instantaneamente)
+	this.beginGoalsBatch();
     rowsToClear.forEach(r => { if (this.clearRow(r)) damageDealt = true; linesCleared++; });
     colsToClear.forEach(c => { if (this.clearCol(c)) damageDealt = true; linesCleared++; });
+	this.endGoalsBatch();
 
     if (linesCleared > 0) {
         // Atualiza o grid real para vazio (os clones estarão por cima tapando o buraco)
@@ -2863,58 +3008,70 @@ clearGhostPreview() {
 
 
     clearRow(r) {
-        let foundDamage = false;
-        for(let c=0; c<this.gridSize; c++) {
-            if(this.grid[r][c]) {
-                if(this.collectItem(r, c, this.grid[r][c])) foundDamage = true; 
-                this.grid[r][c] = null;
-            }
+    let foundDamage = false;
+    for (let c = 0; c < this.gridSize; c++) {
+        if (this.grid[r][c]) {
+            if (this.collectItem(r, c, this.grid[r][c])) foundDamage = true;
+            this.grid[r][c] = null;
         }
-        return foundDamage;
     }
+
+    // ✅ Grid mudou: células ficaram vazias
+    this._emptyCellsDirty = true;
+
+    return foundDamage;
+}
+
 
     clearCol(c) {
-        let foundDamage = false;
-        for(let r=0; r<this.gridSize; r++) {
-            if (this.grid[r][c]) { 
-                if(this.collectItem(r, c, this.grid[r][c])) foundDamage = true;
-                this.grid[r][c] = null;
-            }
+    let foundDamage = false;
+    for (let r = 0; r < this.gridSize; r++) {
+        if (this.grid[r][c]) {
+            if (this.collectItem(r, c, this.grid[r][c])) foundDamage = true;
+            this.grid[r][c] = null;
         }
-        return foundDamage;
     }
+
+    // ✅ Grid mudou: células ficaram vazias
+    this._emptyCellsDirty = true;
+
+    return foundDamage;
+}
 
     collectItem(r, c, cellData) {
-        if (!cellData) return false;
-        
-        if (cellData.type === 'ITEM') {
-            const key = cellData.key.toLowerCase(); 
-            const emoji = cellData.emoji || EMOJI_MAP[key] || '?';
-            
-            this.runFlyAnimation(r, c, key, emoji);
+    if (!cellData) return false;
 
-            if (this.currentGoals[key] !== undefined) {
-                this.collected[key] = (this.collected[key] || 0) + 1;
+    if (cellData.type === 'ITEM') {
+        const key = cellData.key.toLowerCase();
+        const emoji = cellData.emoji || EMOJI_MAP[key] || '?';
+
+        this.runFlyAnimation(r, c, key, emoji);
+
+        // Goals (batched)
+        if (this.currentGoals && this.currentGoals[key] !== undefined) {
+            this.collected[key] = (this.collected[key] || 0) + 1;
+
+            // Se estamos em batch, só marca dirty.
+            // Se não, atualiza como antes (imediato).
+            if (this._goalsBatchDepth > 0) {
+                this._goalsDirty = true;
+            } else {
                 this.updateGoalsUI();
             }
-            
-            // DANO NO BOSS (RPG)
-            if (this.currentMode === 'adventure' && this.bossState.active) {
-                // Busca o dano na tabela, ou usa 1 se não achar
-                const stats = ITEM_STATS[key] || ITEM_STATS['default'];
-                const damage = stats ? stats.damage : 1;
-                
-                // Aplica o dano
-                this.damageBoss(damage);
-                
-                // REMOVIDO: A linha que causava o travamento (showFloatingText)
-                // Se quiser esse efeito no futuro, precisaremos criar a função no effects.js primeiro.
-                
-                return true; 
-            }
         }
-        return false;
+
+        // DANO NO BOSS (RPG)
+        if (this.currentMode === 'adventure' && this.bossState.active) {
+            const stats = ITEM_STATS[key] || ITEM_STATS['default'];
+            const damage = stats ? stats.damage : 1;
+            this.damageBoss(damage);
+            return true;
+        }
     }
+
+    return false;
+}
+
 
     processBossTurn(damageDealt) {
         if (damageDealt) {
@@ -2963,40 +3120,71 @@ clearGhostPreview() {
     }
 
     damageBoss(amount) {
-        this.bossState.currentHp = Math.max(0, this.bossState.currentHp - amount);
+    if (!amount) return;
+
+    // Acumula dano no frame atual
+    this._pendingBossDamage = (this._pendingBossDamage || 0) + amount;
+
+    // Agenda aplicação 1x por frame
+    if (this._bossDamageRaf) return;
+
+    this._bossDamageRaf = requestAnimationFrame(() => {
+        this._bossDamageRaf = 0;
+
+        const dmg = this._pendingBossDamage || 0;
+        this._pendingBossDamage = 0;
+
+        if (dmg <= 0) return;
+
+        this.bossState.currentHp = Math.max(0, this.bossState.currentHp - dmg);
+
+        // Atualiza UI uma vez
         this.updateBossUI();
-        
-        if (this.bossState.currentHp <= 0) {
+
+        // Dispara win uma única vez
+        if (this.bossState.currentHp <= 0 && !this._bossWinScheduled) {
+            this._bossWinScheduled = true;
             setTimeout(() => {
-                this.gameWon({}, []); 
+                this._bossWinScheduled = false;
+                this.gameWon({}, []);
             }, 500);
         }
-    }
+    });
+}
+
 
     updateBossUI() {
-        const bar = document.getElementById('boss-hp-bar');
-        const text = document.getElementById('boss-hp-text'); // Novo elemento
-        
-        // Atualiza a Barra Visual
-        if(bar) {
-            const pct = (this.bossState.currentHp / this.bossState.maxHp) * 100;
-            bar.style.width = pct + '%';
-        }
-
-        // Atualiza o Texto Numérico
-        if(text) {
-            // Arredonda para não mostrar decimais quebrados
-            const current = Math.ceil(this.bossState.currentHp);
-            text.innerText = `${current}/${this.bossState.maxHp}`;
-        }
+    // Cacheia elementos (evita getElementById repetido)
+    if (!this._bossUI) {
+        this._bossUI = {
+            bar: document.getElementById('boss-hp-bar'),
+            text: document.getElementById('boss-hp-text')
+        };
     }
 
+    const bar = this._bossUI.bar;
+    const text = this._bossUI.text;
+
+    const pct = (this.bossState.currentHp / this.bossState.maxHp) * 100;
+
+    if (bar) {
+        const w = pct + '%';
+        if (bar.style.width !== w) bar.style.width = w;
+    }
+
+    if (text) {
+        const current = Math.ceil(this.bossState.currentHp);
+        const newText = `${current}/${this.bossState.maxHp}`;
+        if (text.textContent !== newText) text.textContent = newText;
+    }
+}
+
+
     checkMovesAvailable() {
-    // Se não tem dock, assume que está tudo ok (mantém seu comportamento)
+    // Mantém seu comportamento
     if (!this.dockEl) return true;
 
-    // Em vez de ler DOM, usa diretamente a mão atual
-    // Filtra peças existentes na mão (mantém equivalência)
+    // Coleta peças existentes na mão
     const pieces = [];
     for (let i = 0; i < this.currentHand.length; i++) {
         const p = this.currentHand[i];
@@ -3006,28 +3194,76 @@ clearGhostPreview() {
 
     const N = this.gridSize;
 
-    for (const piece of pieces) {
-        // Dimensões da peça (usa matrix/layout que você já tem)
-        const rows = piece.matrix ? piece.matrix.length : (piece.layout ? piece.layout.length : 0);
-        const cols = piece.matrix && piece.matrix[0] ? piece.matrix[0].length
-                    : (piece.layout && piece.layout[0] ? piece.layout[0].length : 0);
+    // 1) Garante cache de células vazias
+    // Recalcula se não existir ou se estiver marcado como "dirty"
+    if (!this._emptyCells || this._emptyCellsDirty) {
+        const empties = [];
+        for (let r = 0; r < N; r++) {
+            const row = this.grid[r];
+            for (let c = 0; c < N; c++) {
+                if (row[c] === null) empties.push([r, c]);
+            }
+        }
+        this._emptyCells = empties;
+        this._emptyCellsDirty = false;
 
-        // Se não tem dimensões válidas, pula
+        // Se não há vazios, não existe jogada
+        if (empties.length === 0) return false;
+    }
+
+    const empties = this._emptyCells;
+
+    // 2) Para cada peça, tentamos posições candidatas:
+    // Em vez de testar todo (r,c), testamos ancorando a peça em torno das células vazias.
+    for (const piece of pieces) {
+        const rows = piece.layout?.length || piece.matrix?.length || 0;
+        const cols = piece.layout?.[0]?.length || piece.matrix?.[0]?.length || 0;
         if (!rows || !cols) continue;
 
-        // Limita o range onde a peça pode caber (evita testar posições impossíveis)
-        const maxR = N - rows;
-        const maxC = N - cols;
+        // Otimização: usamos a lista de células preenchidas cacheada do canPlace
+        // (se já existe). Se não existir ainda, canPlace vai criar.
+        const cache = piece._placeCache;
+        const filled = cache?.filled;
 
-        for (let r = 0; r <= maxR; r++) {
-            for (let c = 0; c <= maxC; c++) {
-                if (this.canPlace(r, c, piece)) return true;
+        // Se ainda não existe cache, chama canPlace uma vez em uma posição qualquer
+        // só para garantir que o cache exista (sem custo real significativo).
+        if (!filled) this.canPlace(0, 0, piece);
+
+        const filledCells = piece._placeCache?.filled || [];
+
+        // Para evitar testar mil vezes a mesma âncora, usamos um Set por peça
+        const tested = new Set();
+
+        // Para cada célula vazia, ela deve ser coberta por algum bloco da peça.
+        // Então para cada bloco (dr,dc) tentamos ancorar em (r - dr, c - dc).
+        for (let e = 0; e < empties.length; e++) {
+            const er = empties[e][0];
+            const ec = empties[e][1];
+
+            for (let k = 0; k < filledCells.length; k++) {
+                const dr = filledCells[k][0];
+                const dc = filledCells[k][1];
+
+                const baseR = er - dr;
+                const baseC = ec - dc;
+
+                // Bounds rápidos (evita chamar canPlace à toa)
+                if (baseR < 0 || baseC < 0) continue;
+                if (baseR + rows > N) continue;
+                if (baseC + cols > N) continue;
+
+                const key = (baseR * 16) + baseC; // 16 é seguro p/ grid 8 (chave compacta)
+                if (tested.has(key)) continue;
+                tested.add(key);
+
+                if (this.canPlace(baseR, baseC, piece)) return true;
             }
         }
     }
 
     return false;
 }
+
 
 
     gameWon(collectedGoals = {}, earnedRewards = []) {
@@ -3148,53 +3384,58 @@ clearGhostPreview() {
     }
 	
     gameOver() {
-		// impede qualquer flush/debounce de ressuscitar o save depois da derrota
-		this._saveDisabled = true;
-		this.cancelPendingSaveGameState();
-		this.clearSavedGame();
-        // Limpa o save game na derrota para obrigar reinício
-        this.clearSavedGame();
+    // Impede qualquer flush/debounce de ressuscitar o save depois da derrota
+    this._saveDisabled = true;
+    this.cancelPendingSaveGameState();
 
-        if(this.audio) this.audio.stopMusic();
-        
-        const scoreEl = document.getElementById('score-final');
-        const goalsGrid = document.getElementById('fail-goals-grid');
-        const rewardsSection = document.getElementById('fail-rewards-section');
-        
-        if(scoreEl) scoreEl.innerText = this.score;
+    // Limpa o save game na derrota para obrigar reinício
+    this.clearSavedGame();
 
-        if(goalsGrid) {
-            goalsGrid.innerHTML = '';
-            
-            if (this.bossState.active) {
-                const bossData = this.currentLevelConfig.boss;
-                const hpPercent = Math.round((this.bossState.currentHp / this.bossState.maxHp) * 100);
-                
-                goalsGrid.innerHTML = `
+    // Opcional seguro: invalida cache de vazios (evita qualquer restauração indevida)
+    this._emptyCells = null;
+    this._emptyCellsDirty = true;
+
+    if (this.audio) this.audio.stopMusic();
+
+    const scoreEl = document.getElementById('score-final');
+    const goalsGrid = document.getElementById('fail-goals-grid');
+    const rewardsSection = document.getElementById('fail-rewards-section');
+
+    if (scoreEl) scoreEl.innerText = this.score;
+
+    if (goalsGrid) {
+        goalsGrid.innerHTML = '';
+
+        if (this.bossState.active) {
+            const bossData = this.currentLevelConfig.boss;
+            const hpPercent = Math.round((this.bossState.currentHp / this.bossState.maxHp) * 100);
+
+            goalsGrid.innerHTML = `
+                <div class="result-slot">
+                    <div class="slot-icon">${bossData.emoji}</div>
+                    <div class="slot-count">${hpPercent}% HP</div>
+                </div>`;
+        }
+        else if (this.currentGoals) {
+            Object.keys(this.currentGoals).forEach(key => {
+                const current = this.collected[key] || 0;
+                const target = this.currentGoals[key];
+                const emoji = EMOJI_MAP[key] || '📦';
+
+                goalsGrid.innerHTML += `
                     <div class="result-slot">
-                        <div class="slot-icon">${bossData.emoji}</div>
-                        <div class="slot-count">${hpPercent}% HP</div>
+                        <div class="slot-icon">${emoji}</div>
+                        <div class="slot-count">${current}/${target}</div>
                     </div>`;
-            } 
-            else if (this.currentGoals) {
-                Object.keys(this.currentGoals).forEach(key => {
-                    const current = this.collected[key] || 0;
-                    const target = this.currentGoals[key];
-                    const emoji = EMOJI_MAP[key] || '📦';
-                    
-                    goalsGrid.innerHTML += `
-                        <div class="result-slot">
-                            <div class="slot-icon">${emoji}</div>
-                            <div class="slot-count">${current}/${target}</div>
-                        </div>`;
-                });
-            }
+            });
         }
-
-        if(rewardsSection) {
-            rewardsSection.classList.add('hidden'); 
-        }
-        
-        if(this.modalOver) this.modalOver.classList.remove('hidden');
     }
+
+    if (rewardsSection) {
+        rewardsSection.classList.add('hidden');
+    }
+
+    if (this.modalOver) this.modalOver.classList.remove('hidden');
+}
+
 }
