@@ -5802,6 +5802,240 @@ input:checked + .slider:before { transform: translateX(22px); }
     0 8px 20px rgba(0,0,0,0.35),
     0 0 18px rgba(255,255,255,0.25);
 }
+/* ===============================
+   ETAPA 1 — FUNDO MOBILE-FIRST
+   - Fundo bonito só no #screen-game
+   - No desktop, simula tela de celular
+   =============================== */
+
+:root{
+  --bg-outer-1: #273b78;
+  --bg-outer-2: #16244a;
+  --bg-outer-3: #0b1226;
+  --bg-vignette: rgba(0,0,0,0.45);
+
+  /* “moldura” desktop */
+  --desktop-backdrop: #050816;
+  --phone-frame: rgba(255,255,255,0.06);
+  --phone-shadow: rgba(0,0,0,0.65);
+}
+
+/* Fundo global neutro (não “invade” outras telas) */
+body{
+  margin: 0;
+  overflow: hidden;
+  background: var(--desktop-backdrop);
+  color: #f8fafc;
+}
+
+/* Por padrão: telas não herdam fundo próprio */
+.screen,
+#screen-game{
+  background: transparent;
+}
+
+/* ✅ FUNDO BONITO: somente na tela do jogo */
+#screen-game{
+  position: relative;
+  background:
+    radial-gradient(800px 520px at 50% 18%, rgba(125, 155, 255, 0.28), rgba(0,0,0,0) 62%),
+    radial-gradient(900px 700px at 50% 115%, rgba(0,0,0,0.55), rgba(0,0,0,0) 60%),
+    linear-gradient(180deg, var(--bg-outer-1) 0%, var(--bg-outer-2) 45%, var(--bg-outer-3) 100%);
+}
+
+/* Vinheta e glow só dentro do #screen-game */
+#screen-game::before,
+#screen-game::after{
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+#screen-game::before{
+  background: radial-gradient(1200px 900px at 50% 40%, rgba(0,0,0,0) 55%, var(--bg-vignette) 100%);
+  opacity: 0.9;
+}
+
+#screen-game::after{
+  background: radial-gradient(700px 520px at 50% 52%, rgba(90, 140, 255, 0.18), rgba(0,0,0,0) 70%);
+  opacity: 0.9;
+}
+
+/* ===============================
+   DESKTOP: simula “tela de celular”
+   =============================== */
+@media (min-width: 900px){
+  /* Centraliza qualquer tela como “phone frame” */
+  #screen-game{
+    width: min(420px, 92vw);
+    height: min(900px, 92vh);
+    margin: 4vh auto;
+    border-radius: 22px;
+    border: 1px solid var(--phone-frame);
+    box-shadow: 0 22px 60px var(--phone-shadow);
+    overflow: hidden; /* recorta o fundo dentro do frame */
+  }
+}
+
+/* =========================
+   ETAPA 2 (REVISADA)
+   - Tabuleiro vira o painel principal
+   - Dock fica separado (sem moldura gigante)
+   ========================= */
+
+:root{
+  --board-panel-bg: rgba(10, 16, 34, 0.88);
+  --board-panel-border: rgba(255,255,255,0.10);
+  --board-panel-inner: rgba(255,255,255,0.06);
+}
+
+/* 1) Remove o “panel gigante” da game-area */
+#screen-game .game-area{
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 14px 14px 10px !important;
+}
+#screen-game .game-area::before{
+  display: none !important;
+}
+
+/* 2) Faz o TABULEIRO ser o painel principal */
+#screen-game #game-board{
+  position: relative;
+
+  /* painel do tabuleiro */
+  padding: 14px;              /* espaço para “moldura” */
+  border-radius: 22px;
+  border: 1px solid var(--board-panel-border);
+
+  background:
+    radial-gradient(900px 600px at 50% 0%, rgba(255,255,255,0.06), rgba(0,0,0,0) 65%),
+    linear-gradient(180deg, var(--board-panel-bg), rgba(8, 12, 26, 0.94));
+
+  box-shadow:
+    0 18px 44px rgba(0,0,0,0.45),
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    inset 0 -14px 30px rgba(0,0,0,0.35);
+
+  /* mantém grid e quadrado */
+  aspect-ratio: 1 / 1;
+}
+
+/* contorno interno sutil */
+#screen-game #game-board::before{
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border-radius: 18px;
+  pointer-events: none;
+  border: 1px solid var(--board-panel-inner);
+  opacity: 0.8;
+}
+
+/* 3) Dock separado, com respiro (sem “entrar” no painel do tabuleiro) */
+#screen-game #dock{
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+/* slots do dock como “cards” (sem mexer na peça em si) */
+#screen-game .dock-slot{
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.10);
+
+  background:
+    radial-gradient(200px 160px at 50% 20%, rgba(255,255,255,0.06), rgba(0,0,0,0) 70%),
+    linear-gradient(180deg, rgba(8, 12, 26, 0.70), rgba(6, 10, 22, 0.85));
+
+  box-shadow:
+    0 10px 22px rgba(0,0,0,0.35),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+
+  padding: 12px;
+  min-height: 88px; /* só o slot cresce; peça não muda */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Desktop: mantém proporção boa dentro do frame */
+@media (min-width: 900px){
+  #screen-game .game-area{
+    margin: 16px !important;
+  }
+}
+
+/* =========================
+   FIX — Centralizar DOCK com o TABULEIRO
+   ========================= */
+
+/* Garante que o tabuleiro ocupe 100% do espaço disponível do container */
+#screen-game #game-board{
+  width: 100%;
+}
+
+/* Faz o dock ter a mesma largura do tabuleiro e ficar centralizado */
+#screen-game #dock{
+  width: 100%;
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  justify-content: center; /* se algum browser tratar como flex/grid container */
+}
+
+/* Evita colunas “colapsarem” e dá simetria */
+#screen-game #dock{
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* Se o container pai tiver padding estranho, isso mantém alinhado */
+#screen-game .game-area{
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#screen-game #dock{
+  padding-left: 22px;
+  padding-right: 14px;
+  box-sizing: border-box;
+}
+
+#game-board {
+    background-color: ...;
+    border-radius: ...;
+    box-shadow: ...;
+    padding: ...;
+    gap: ...;
+
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+}
+
+#game-board {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+
+    /* LINHAS FINAS */
+    gap: 1px;
+
+    /* fundo do tabuleiro (um pouco mais escuro que o app) */
+    background-color: #1e293b;
+
+    padding: 6px;
+    border-radius: 16px;
+}
+
+
+
+
+
 
 
 
