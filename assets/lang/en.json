@@ -68,9 +68,17 @@
         "ignis": "Ignis",
         "magmor": "Magmor",
         "pyra": "Infernal Phoenix",
+        "wolf_alpha": "Alpha Wolf",
+        "ent_ancient": "Ancient Ent",
         "aracna": "Arachna",
-        "golem": "Golem King",
-        "grok": "Warlord Grok",
+        "troll": "Troll",
+        "giant": "Giant",
+        "golem_king": "Golem King",
+        "mummy": "Mummy",
+        "scorpion": "Scorpion",
+        "warlord_grok": "Warlord Grok",
+        "gargoyle": "Gargoyle",
+        "knight": "Shadow Knight",
         "dark_wizard": "Dark Wizard",
         "defeated": "DEFEATED"
     },
@@ -142,6 +150,22 @@
 	"campfire": {
         "text": "The campfire crackles under the moonlight. The path to the Dark Castle is sealed by ancient magic.\n\nTo proceed, you must prove your worth by defeating the **Guardian of the Worlds**.",
         "btn_start": "🔥 Face the Guardian"
+    },
+    "classic": {
+        "score": "Score",
+        "level": "Level",
+        "best": "Best",
+        "combo": "COMBO",
+        "lines": "Lines",
+        "perfect_clear": "PERFECT CLEAR! +2000",
+        "level_up": "LEVEL",
+        "feedback_good": "GOOD!",
+        "feedback_great": "GREAT!",
+        "feedback_excellent": "EXCELLENT!",
+        "feedback_perfect": "PERFECT!",
+        "feedback_wow": "WOW!",
+        "feedback_holycow": "HOLY COW!!",
+        "feedback_unreal": "UNREAL!!!"
     }
-	
+
 }

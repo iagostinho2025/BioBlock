@@ -9,22 +9,46 @@ import { I18nSystem } from './modules/i18n.js'; // ADICIONADO: Importação do s
 const EMOJI_MAP = {
     // Itens Clássicos
     'bee': '🐝', 'ghost': '👻', 'cop': '👮', 'ice_shard': '💎',
-    
+
     // Power-Ups
     'magnet': '🧲', 'rotate': '🔄', 'swap': '🔀',
-    
+
     // Mundo Fogo
     'fire': '🔥', 'heart': '❤️‍🔥', 'collision': '💥', 'volcano': '🌋',
-    
+
     // Adicione estes para os poderes dos Bosses funcionarem visualmente
-    'stone': '🪨', 
+    'stone': '🪨',
     'coal': '⚫',
-    
+
     // Mundo Água
     'drop': '💧', 'fish': '🐟', 'algae': '🌿',
-    
+
     // Mundo Floresta
-    'leaf': '🍃'
+    'leaf': '🍃',
+    'poison': '☠️',
+    'mushroom': '🍄',
+    'thorns': '🌿',
+    'web': '🕸️',
+
+    // Mundo Montanha
+    'gold': '💰',
+    'pickaxe': '⛏️',
+    'iron': '⚙️',
+    'rocks': '🪨',
+    'debris': '💥',
+
+    // Mundo Deserto
+    'bone': '🦴',
+    'sand': '🏖️',
+    'skull': '💀',
+    'quicksand': '🏜️',
+    'sandstorm': '🌪️',
+
+    // Mundo Castelo Sombrio
+    'magic': '🔮',
+    'crystal': '💎',
+    'shadows': '🌑',
+    'void': '⚫'
 };
 
 export class Game {

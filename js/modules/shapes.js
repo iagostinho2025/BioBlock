@@ -38,21 +38,36 @@ const SAFE_SHAPES = ['dot', 'mini-h', 'mini-v'];
 
 // TABELA MESTRA DE STATS (Dano e Raridade)
 export const ITEM_STATS = {
-    // MUNDO FOGO
-    'fire':      { damage: 1,  weight: 80 }, 
-    'heart':     { damage: 3,  weight: 40 }, 
-    'collision': { damage: 5,  weight: 10 }, 
-    
+    // MUNDO FOGO (Fases 1-20)
+    'fire':      { damage: 1,  weight: 80 },
+    'heart':     { damage: 3,  weight: 40 },
+    'collision': { damage: 5,  weight: 10 },
+
+    // MUNDO FLORESTA (Fases 21-40)
+    'leaf':      { damage: 1,  weight: 80 },  // Comum - Folhas da floresta
+    'poison':    { damage: 3,  weight: 40 },  // Raro - Veneno
+    'mushroom':  { damage: 5,  weight: 10 },  // Épico - Cogumelos mágicos
+
+    // MUNDO MONTANHA (Fases 41-60)
+    'gold':      { damage: 1,  weight: 80 },  // Comum - Ouro
+    'pickaxe':   { damage: 3,  weight: 40 },  // Raro - Picareta
+    'iron':      { damage: 5,  weight: 10 },  // Épico - Ferro
+
+    // MUNDO DESERTO (Fases 61-80)
+    'bone':      { damage: 1,  weight: 80 },  // Comum - Ossos
+    'sand':      { damage: 3,  weight: 40 },  // Raro - Areia
+    'skull':     { damage: 5,  weight: 10 },  // Épico - Caveira
+
+    // MUNDO CASTELO (Fases 81-100)
+    'magic':     { damage: 1,  weight: 80 },  // Comum - Magia
+    'skull':     { damage: 3,  weight: 40 },  // Raro - Crânio (Reuso)
+    'crystal':   { damage: 5,  weight: 10 },  // Épico - Cristal Negro
+
     // ITENS BÔNUS
     'magnet':    { damage: 1,  weight: 15 },
     'rotate':    { damage: 1,  weight: 15 },
     'swap':      { damage: 1,  weight: 15 },
 
-    // Futuros
-    'drop':      { damage: 1,  weight: 80 },
-    'fish':      { damage: 3,  weight: 40 },
-    'leaf':      { damage: 1,  weight: 80 },
-    
     // Fallback
     'default':   { damage: 1,  weight: 50 }
 };

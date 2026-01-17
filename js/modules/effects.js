@@ -35,6 +35,11 @@ export class EffectsSystem {
 
         // Cache de boxShadow por cor (evita concatenar string repetida em rajada)
         this._shadowCache = new Map();
+		
+		this._performanceMode = 'auto'; // 'high', 'medium', 'low', 'auto'
+    this._fpsHistory = [];
+    this._lastFrameTime = performance.now();
+    this._detectPerformanceMode();
     }
 
     initPool() {
@@ -54,6 +59,43 @@ export class EffectsSystem {
             this.particlePool.push(p);
         }
     }
+	
+	_detectPerformanceMode() {
+    // Testa capacidade do dispositivo usando requestAnimationFrame
+    let frames = 0;
+    let startTime = performance.now();
+    
+    const testLoop = () => {
+        frames++;
+        const elapsed = performance.now() - startTime;
+        
+        if (elapsed < 1000) {
+            requestAnimationFrame(testLoop);
+        } else {
+            // Calcula FPS médio
+            const avgFps = frames;
+            
+            // Define modo baseado no FPS
+            if (avgFps >= 55) {
+                this._performanceMode = 'high';
+                this._maxParticlesPerFrame = 22; // Original
+                this._maxExplosionsPerFrame = 6;
+            } else if (avgFps >= 40) {
+                this._performanceMode = 'medium';
+                this._maxParticlesPerFrame = 14; // Reduzido
+                this._maxExplosionsPerFrame = 4;
+            } else {
+                this._performanceMode = 'low';
+                this._maxParticlesPerFrame = 8; // Mínimo
+                this._maxExplosionsPerFrame = 2;
+            }
+            
+            console.log(`[Effects] Modo: ${this._performanceMode} (FPS: ${avgFps})`);
+        }
+    };
+    
+    requestAnimationFrame(testLoop);
+}
 
     getParticle() {
         const p = this.particlePool[this.poolIndex];

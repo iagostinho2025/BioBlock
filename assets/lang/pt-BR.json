@@ -68,9 +68,17 @@
         "ignis": "Ignis",
         "magmor": "Magmor",
         "pyra": "Fênix Infernal",
+        "wolf_alpha": "Lobo Alfa",
+        "ent_ancient": "Ent Ancião",
         "aracna": "Aracna",
-        "golem": "Golem Rei",
-        "grok": "Warlord Grok",
+        "troll": "Troll",
+        "giant": "Gigante",
+        "golem_king": "Golem Rei",
+        "mummy": "Múmia",
+        "scorpion": "Escorpião",
+        "warlord_grok": "Warlord Grok",
+        "gargoyle": "Gárgula",
+        "knight": "Cavaleiro Sombrio",
         "dark_wizard": "Mago Negro",
         "defeated": "DERROTADO"
     },
@@ -142,5 +150,21 @@
 	"campfire": {
         "text": "A fogueira crepita sob o luar. O caminho para o Castelo Sombrio está selado por uma magia antiga.\n\nPara prosseguir, você deve provar seu valor vencendo o **Guardião dos Mundos**.",
         "btn_start": "🔥 Enfrentar o Guardião"
+    },
+    "classic": {
+        "score": "Pontuação",
+        "level": "Nível",
+        "best": "Recorde",
+        "combo": "COMBO",
+        "lines": "Linhas",
+        "perfect_clear": "LIMPEZA PERFEITA! +2000",
+        "level_up": "NÍVEL",
+        "feedback_good": "BOA!",
+        "feedback_great": "ÓTIMO!",
+        "feedback_excellent": "EXCELENTE!",
+        "feedback_perfect": "PERFEITO!",
+        "feedback_wow": "UAU!",
+        "feedback_holycow": "CARAMBA!!",
+        "feedback_unreal": "IRREAL!!!"
     }
 }
