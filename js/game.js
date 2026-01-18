@@ -89,9 +89,21 @@ export class Game {
         // Estado do Jogo
         this.currentMode = 'casual'; 
         this.currentLevelConfig = null;
-        this.currentHand = []; 
+        this.currentHand = [];
         this.bossState = { active: false, maxHp: 0, currentHp: 0, attackRate: 3, movesWithoutDamage: 0 };
-        
+
+        // Estado do Modo Clássico
+        this.classicState = {
+            score: 0,
+            level: 1,
+            linesCleared: 0,
+            bestScore: parseInt(localStorage.getItem('classic_best_score') || '0'),
+            comboStreak: 0,
+            comboTimer: null,
+            recordBeaten: false, // Flag para controlar se já mostrou mensagem de recorde
+            visualV1: true // Feature flag para efeitos visuais premium (true = ativado)
+        };
+
         this.currentGoals = {}; 
         this.collected = {};
         this.score = 0;
@@ -706,7 +718,7 @@ flushSaveGameState() {
         };
 
         // Navegação Principal
-        bindClick('btn-mode-casual', () => this.startCasualMode());
+        bindClick('btn-mode-casual', () => this.startClassicMode());
         bindClick('btn-mode-adventure', () => this.checkAdventureIntro()); 
         bindClick('btn-mode-blitz', () => alert(this.i18n.t('menu.blitz_coming_soon')));
         bindClick('btn-back-menu', () => this.showScreen(this.screenMenu));
@@ -1001,6 +1013,13 @@ flushSaveGameState() {
     }
 	
 	renderControlsUI() {
+    // No modo clássico, não renderizar controles
+    if (this.currentMode === 'classic') {
+        const controlsBar = document.getElementById('controls-bar');
+        if (controlsBar) controlsBar.style.display = 'none';
+        return;
+    }
+
     // Mantém compatibilidade com UI antiga
     const oldPwr = document.getElementById('powerups-area');
     if (oldPwr) oldPwr.style.display = 'none';
@@ -1018,6 +1037,9 @@ flushSaveGameState() {
         } else {
             document.body.appendChild(controlsContainer);
         }
+    } else {
+        // Garante que está visível no modo aventura
+        controlsContainer.style.display = '';
     }
 
     // Cria grupos uma vez
@@ -1742,13 +1764,49 @@ endGoalsBatch() {
         return false;
     }
 
-    startCasualMode() {
-        this.currentMode = 'casual';
+    startClassicMode() {
+        this.currentMode = 'classic';
         this.currentLevelConfig = null;
+
+        // Reseta estado do modo clássico
+        this.classicState.score = 0;
+        this.classicState.level = 1;
+        this.classicState.linesCleared = 0;
+        this.classicState.comboStreak = 0;
+        this.classicState.recordBeaten = false; // Reseta flag de recorde
+        if (this.classicState.comboTimer) {
+            clearTimeout(this.classicState.comboTimer);
+            this.classicState.comboTimer = null;
+        }
+
         this.clearTheme();
         this.showScreen(this.screenGame);
-        this.setupGoalsUI({ bee: 10, ghost: 10, cop: 10 });
         this.resetGame();
+
+        // Esconder área de objetivos do modo aventura
+        const goalsArea = document.getElementById('goals-area');
+        if (goalsArea) {
+            goalsArea.style.display = 'none';
+        }
+
+        // Esconder AMBAS as barras de power-ups (antiga e nova)
+        const powerupsArea = document.getElementById('powerups-area');
+        if (powerupsArea) {
+            powerupsArea.style.display = 'none';
+        }
+
+        const controlsBar = document.getElementById('controls-bar');
+        if (controlsBar) {
+            controlsBar.style.display = 'none';
+        }
+
+        // Mostrar UI do modo clássico
+        const statsPanel = document.getElementById('classic-stats');
+        if (statsPanel) {
+            statsPanel.classList.remove('hidden');
+            statsPanel.style.display = ''; // Remove display: none se existir
+            this.updateClassicUI();
+        }
     }
 
     startAdventureLevel(levelConfig) {
@@ -1756,7 +1814,31 @@ endGoalsBatch() {
         this.currentLevelConfig = levelConfig;
 		this._saveDisabled = false;
         this.showScreen(this.screenGame);
-        
+
+        // Esconder UI do modo clássico (FORÇA ESCONDER)
+        const statsPanel = document.getElementById('classic-stats');
+        if (statsPanel) {
+            statsPanel.classList.add('hidden');
+            statsPanel.style.display = 'none'; // Garante que fique escondido
+        }
+
+        // Mostrar área de objetivos do modo aventura
+        const goalsArea = document.getElementById('goals-area');
+        if (goalsArea) {
+            goalsArea.style.display = '';
+        }
+
+        // Mostrar barra de power-ups no modo aventura
+        const powerupsArea = document.getElementById('powerups-area');
+        if (powerupsArea) {
+            powerupsArea.style.display = '';
+        }
+
+        const controlsBar = document.getElementById('controls-bar');
+        if (controlsBar) {
+            controlsBar.style.display = '';
+        }
+
         if (this.audio) {
             if (levelConfig.musicId) {
                 this.audio.playMusic(levelConfig.musicId);
@@ -1929,6 +2011,9 @@ endGoalsBatch() {
         setTimeout(() => {
             this.startAdventureLevel(this.currentLevelConfig);
         }, 10);
+    } else if (this.currentMode === 'classic') {
+        // Reinicia o modo clássico do zero
+        this.startClassicMode();
     } else {
         this.resetGame();
     }
@@ -2183,6 +2268,11 @@ renderCell(div, cellData) {
   if (cellData.key) div.classList.add('type-' + cellData.key.toLowerCase());
   else this.applyColorClass(div, cellData);
 
+  // Visual V1: Usa o colorId JÁ armazenado na célula (propagado da peça)
+  if (this.currentMode === 'classic' && this.classicState.visualV1 && cellData.colorId) {
+    div.classList.add(`classic-color-${cellData.colorId}`);
+  }
+
   if (cellData.type === 'ITEM' || cellData.type === 'OBSTACLE') {
     const emoji = cellData.emoji || EMOJI_MAP[cellData.key] || '?';
     div.innerText = emoji;
@@ -2339,6 +2429,12 @@ renderCell(div, cellData) {
             if (cellData) {
                 block.classList.add('block-unit');
                 this.applyColorClass(block, cellData);
+
+                // Visual V1: Usa o colorId da PEÇA (todos os blocos mesma cor)
+                if (this.currentMode === 'classic' && this.classicState.visualV1 && piece.colorId) {
+                    block.classList.add(`classic-color-${piece.colorId}`);
+                    block.classList.add('classic-piece-glow');
+                }
 
                 // Emoji para ITEM no deck
                 if (typeof cellData === 'object' && cellData.type === 'ITEM') {
@@ -2757,6 +2853,12 @@ renderCell(div, cellData) {
                 const cell = this.boardEl.children[idx];
                 if (cell) {
                     cell.classList.add('ghost', className);
+
+                    // Visual V1: Aplica a cor da peça no ghost preview
+                    if (this.currentMode === 'classic' && this.classicState.visualV1 && piece.colorId) {
+                        cell.classList.add(`classic-color-${piece.colorId}`);
+                    }
+
                     this._ghostIdxs.push(idx); // ✅ registra pra limpar depois
                 }
             }
@@ -2765,19 +2867,30 @@ renderCell(div, cellData) {
 }
 
 clearGhostPreview() {
-    // Se não há ghost anterior, não faz nada
-    const idxs = this._ghostIdxs;
-    if (!idxs || idxs.length === 0) return;
+  const idxs = this._ghostIdxs;
+  if (!idxs || idxs.length === 0) return;
 
-    // Remove classes apenas dos elementos que foram marcados
-    for (let k = 0; k < idxs.length; k++) {
-        const cell = this.boardEl.children[idxs[k]];
-        if (cell) cell.classList.remove('ghost', 'ghost-valid', 'ghost-invalid');
+  for (let k = 0; k < idxs.length; k++) {
+    const idx = idxs[k];
+    const cell = this.boardEl.children[idx];
+    if (!cell) continue;
+
+    // remove só o estado de ghost
+    cell.classList.remove('ghost', 'ghost-valid', 'ghost-invalid');
+
+    // NÃO remover a cor se agora virou célula preenchida de verdade
+    const r = Math.floor(idx / this.gridSize);
+    const c = idx % this.gridSize;
+    const isActuallyFilled = this.grid[r]?.[c] !== null;
+
+    if (!isActuallyFilled && this.currentMode === 'classic' && this.classicState.visualV1) {
+      for (let i = 1; i <= 8; i++) cell.classList.remove(`classic-color-${i}`);
     }
+  }
 
-    // Limpa lista (sem alocar nova)
-    idxs.length = 0;
+  idxs.length = 0;
 }
+
 
 
     canPlace(r, c, piece) {
@@ -2820,21 +2933,37 @@ clearGhostPreview() {
 
     placePiece(r, c, piece) {
         if (!this.canPlace(r, c, piece)) return false;
-        
+
         for (let i = 0; i < piece.layout.length; i++) {
             for (let j = 0; j < piece.layout[i].length; j++) {
                 const cellData = piece.layout[i][j];
-                
-                if (cellData) { 
+
+                if (cellData) {
                     const targetR = r + i;
                     const targetC = c + j;
-                    
+
+                    // Propaga o colorId da PEÇA para a célula no grid
+                    if (this.currentMode === 'classic' && this.classicState.visualV1 && piece.colorId) {
+                        cellData.colorId = piece.colorId;
+                    }
+
                     this.grid[targetR][targetC] = cellData;
-                    
+
                     const cellEl = this.boardEl.children[targetR * 8 + targetC];
-                    cellEl.classList.add('filled');
-                    this.applyColorClass(cellEl, cellData);
-                    
+
+                    // Limpa classes anteriores mas preserva 'cell'
+                    cellEl.className = 'cell filled';
+
+                    // Visual V1: Aplica cor PRIMEIRO (antes de applyColorClass)
+                    if (this.currentMode === 'classic' && this.classicState.visualV1 && cellData.colorId) {
+                        cellEl.classList.add(`classic-color-${cellData.colorId}`);
+                        cellEl.classList.add('classic-pop');
+                        setTimeout(() => cellEl.classList.remove('classic-pop'), 300);
+                    } else {
+                        // Modo aventura: usa applyColorClass normal
+                        this.applyColorClass(cellEl, cellData);
+                    }
+
                     if (cellData.type === 'ITEM') {
                         const emoji = cellData.emoji || EMOJI_MAP[cellData.key] || '?';
                         cellEl.innerText = emoji;
@@ -2882,6 +3011,12 @@ clearGhostPreview() {
             const rect = cell.getBoundingClientRect();
             const clone = cell.cloneNode(true);
 
+            // Visual V1: Adiciona animação de line clear antes de explodir
+            if (this.currentMode === 'classic' && this.classicState.visualV1) {
+                cell.classList.add('classic-line-clear');
+                setTimeout(() => cell.classList.remove('classic-line-clear'), 400);
+            }
+
             // Configura o clone para ser "fixed" (solto na tela)
             clone.classList.add('cell-explosion'); // Classe CSS que vamos criar
             clone.style.position = 'fixed';
@@ -2896,9 +3031,9 @@ clearGhostPreview() {
             clone.style.transform = 'none';
 
             // Guarda a cor para as partículas
-            const colorClass = Array.from(cell.classList).find(cls => cls.startsWith('type-') || cls === 'lava') || 'type-normal';
+            const colorClass = Array.from(cell.classList).find(cls => cls.startsWith('type-') || cls.startsWith('classic-color-') || cls === 'lava') || 'type-normal';
 
-            visualExplosions.push({ clone, rect, colorClass });
+            visualExplosions.push({ clone, rect, colorClass, cell });
         }
     };
 
@@ -2941,6 +3076,11 @@ clearGhostPreview() {
                     item.clone.classList.add('explode');
                     // Solta as partículas sincronizadas com o estouro do clone
                     this.spawnExplosion(item.rect, item.colorClass);
+
+                    // Visual V1: Partículas coloridas
+                    if (this.currentMode === 'classic' && this.classicState.visualV1) {
+                        this.spawnClassicParticles(item.rect, item.colorClass);
+                    }
                 });
 
                 // Remove o clone do DOM depois que a animação acaba
@@ -2959,6 +3099,76 @@ clearGhostPreview() {
         if (now - (this.comboState.lastClearTime || 0) <= 5000) this.comboState.count++;
         else this.comboState.count = 1;
         this.comboState.lastClearTime = now;
+
+        // Sistema de Pontuação do Modo Clássico
+        if (this.currentMode === 'classic') {
+            const baseScore = this.calculateClassicScore(linesCleared);
+            const comboMultiplier = 1 + (Math.min(this.classicState.comboStreak, 5) * 0.5);
+            const totalScore = Math.floor(baseScore * comboMultiplier);
+
+            this.classicState.score += totalScore;
+            this.classicState.linesCleared += linesCleared;
+            this.classicState.comboStreak++;
+
+            // Salvar Best Score
+            if (this.classicState.score > this.classicState.bestScore) {
+                this.classicState.bestScore = this.classicState.score;
+                localStorage.setItem('classic_best_score', this.classicState.bestScore.toString());
+
+                // Mostrar mensagem apenas na PRIMEIRA vez que bate o recorde
+                if (!this.classicState.recordBeaten) {
+                    this.classicState.recordBeaten = true;
+                    console.log(`[CLASSIC] 🏆 NEW RECORD! ${this.classicState.bestScore} pontos`);
+
+                    // Feedback visual de novo recorde
+                    if (this.effects && this.effects.showFloatingTextCentered) {
+                        this.effects.showFloatingTextCentered('NEW RECORD! 🏆', 'feedback-gold');
+                    }
+                }
+            }
+
+            // Sistema de Níveis
+            const newLevel = Math.floor(this.classicState.linesCleared / 10) + 1;
+            if (newLevel > this.classicState.level) {
+                this.classicState.level = newLevel;
+                console.log(`[CLASSIC] LEVEL UP! Nível ${this.classicState.level}`);
+
+                // Verifica se método triggerScreenFlash existe antes de chamar
+                if (this.effects && this.effects.triggerScreenFlash) {
+                    this.effects.triggerScreenFlash('#a855f7'); // Flash roxo
+                }
+            }
+
+            console.log(`[CLASSIC] Score: ${this.classicState.score}, Lines: ${this.classicState.linesCleared}, Combo: ${this.classicState.comboStreak}x, +${totalScore}pts`);
+
+            // Atualizar UI em tempo real
+            this.updateClassicUI();
+
+            // Feedback visual de combo
+            this.showClassicFeedback();
+
+            // Resetar timer de combo
+            this.resetClassicComboTimer();
+
+            // Perfect Clear Bonus
+            if (this.isPerfectClear()) {
+                this.classicState.score += 2000;
+                console.log('[CLASSIC] 💎 PERFECT CLEAR! +2000 pontos');
+
+                // Flash dourado
+                if (this.effects && this.effects.triggerScreenFlash) {
+                    this.effects.triggerScreenFlash('#fbbf24');
+                }
+
+                // Mensagem visual
+                if (this.effects && this.effects.showFloatingTextCentered) {
+                    this.effects.showFloatingTextCentered('PERFECT CLEAR! +2000', 'feedback-epic');
+                }
+
+                // Atualizar UI com o bonus
+                this.updateClassicUI();
+            }
+        }
 
         const comboCount = this.comboState.count;
 
@@ -3027,9 +3237,105 @@ clearGhostPreview() {
     return damageDealt;
 }
 
-	
-	
+    calculateClassicScore(linesCleared) {
+        switch(linesCleared) {
+            case 1: return 100;
+            case 2: return 300;
+            case 3: return 600;
+            case 4: return 1000;
+            default: return 1000 + (linesCleared - 4) * 400;
+        }
+    }
 
+    updateClassicUI() {
+        const scoreEl = document.getElementById('classic-score');
+        const levelEl = document.getElementById('classic-level');
+        const bestEl = document.getElementById('classic-best');
+
+        if (scoreEl) scoreEl.textContent = this.classicState.score.toLocaleString();
+        if (levelEl) levelEl.textContent = this.classicState.level;
+        if (bestEl) bestEl.textContent = this.classicState.bestScore.toLocaleString();
+    }
+
+    spawnClassicParticles(rect, colorClass) {
+        const particleCount = 15;
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+
+        // Mapeia classe CSS para cor hexadecimal
+        const colorMap = {
+            'classic-color-1': '#667eea',
+            'classic-color-2': '#f093fb',
+            'classic-color-3': '#4facfe',
+            'classic-color-4': '#43e97b',
+            'classic-color-5': '#fa709a',
+            'classic-color-6': '#feca57',
+            'classic-color-7': '#ee5a6f',
+            'classic-color-8': '#c471ed'
+        };
+
+        const baseColor = colorMap[colorClass] || '#667eea';
+
+        for (let i = 0; i < particleCount; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'classic-particle';
+            particle.style.left = `${centerX}px`;
+            particle.style.top = `${centerY}px`;
+            particle.style.background = baseColor;
+
+            // Gera trajetória aleatória em círculo
+            const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.5;
+            const speed = 50 + Math.random() * 100;
+            const tx = Math.cos(angle) * speed;
+            const ty = Math.sin(angle) * speed;
+
+            particle.style.setProperty('--tx', `${tx}px`);
+            particle.style.setProperty('--ty', `${ty}px`);
+
+            document.body.appendChild(particle);
+
+            // Remove após animação
+            setTimeout(() => particle.remove(), 800);
+        }
+    }
+
+    resetClassicComboTimer() {
+        if (this.classicState.comboTimer) {
+            clearTimeout(this.classicState.comboTimer);
+        }
+
+        this.classicState.comboTimer = setTimeout(() => {
+            if (this.classicState.comboStreak > 0) {
+                console.log('[CLASSIC] Combo quebrado!');
+                this.classicState.comboStreak = 0;
+            }
+        }, 3000);
+    }
+
+    showClassicFeedback() {
+        const streak = this.classicState.comboStreak;
+        let text = '';
+
+        if (streak === 1) text = this.i18n.t('classic.feedback_good');
+        else if (streak === 2) text = this.i18n.t('classic.feedback_great');
+        else if (streak === 3) text = this.i18n.t('classic.feedback_excellent');
+        else if (streak === 4) text = this.i18n.t('classic.feedback_perfect');
+        else if (streak >= 5) text = this.i18n.t('classic.feedback_unreal');
+
+        if (text && this.effects && this.effects.showFloatingText) {
+            this.effects.showFloatingText(text, {
+                x: window.innerWidth / 2,
+                y: window.innerHeight / 2,
+                size: 48,
+                color: '#fbbf24',
+                duration: 800
+            });
+        }
+    }
+
+    isPerfectClear() {
+        return this.grid.every(row => row.every(cell => cell === null));
+    }
 
     clearRow(r) {
     let foundDamage = false;

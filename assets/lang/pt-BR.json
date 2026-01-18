@@ -151,20 +151,17 @@
         "text": "A fogueira crepita sob o luar. O caminho para o Castelo Sombrio está selado por uma magia antiga.\n\nPara prosseguir, você deve provar seu valor vencendo o **Guardião dos Mundos**.",
         "btn_start": "🔥 Enfrentar o Guardião"
     },
-    "classic": {
+	"classic": {
+        "title": "Modo Clássico",
         "score": "Pontuação",
         "level": "Nível",
         "best": "Recorde",
-        "combo": "COMBO",
         "lines": "Linhas",
-        "perfect_clear": "LIMPEZA PERFEITA! +2000",
-        "level_up": "NÍVEL",
+        "combo": "COMBO",
         "feedback_good": "BOA!",
         "feedback_great": "ÓTIMO!",
         "feedback_excellent": "EXCELENTE!",
         "feedback_perfect": "PERFEITO!",
-        "feedback_wow": "UAU!",
-        "feedback_holycow": "CARAMBA!!",
         "feedback_unreal": "IRREAL!!!"
     }
 }

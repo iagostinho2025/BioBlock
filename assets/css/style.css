@@ -235,9 +235,9 @@ body {
 
 /* --- REGRA 1: Bloco Normal (Cinza) --- */
 /* Aplica se NÃO tiver uma classe de tipo específica */
-.cell.filled:not([class*="type-"]), 
-.block-unit:not([class*="type-"]),
-.type-normal {
+.cell.filled:not([class*="type-"]):not([class*="classic-color-"]),
+.block-unit:not([class*="type-"]):not([class*="classic-color-"]),
+.type-normal:not([class*="classic-color-"]) {
     background: var(--color-normal) !important;
 }
 
@@ -480,9 +480,9 @@ body {
 }
 
 /* --- REGRA 1: Bloco Normal (Prata) --- */
-.cell.filled:not([class*="type-"]), 
-.block-unit:not([class*="type-"]),
-.type-normal {
+.cell.filled:not([class*="type-"]):not([class*="classic-color-"]),
+.block-unit:not([class*="type-"]):not([class*="classic-color-"]),
+.type-normal:not([class*="classic-color-"]) {
     background: linear-gradient(135deg, #94a3b8, #64748b); /* Gradiente leve */
 }
 
@@ -5973,5 +5973,207 @@ input:checked + .slider:before { transform: translateX(22px); }
     0 0 18px rgba(255,255,255,0.25);
 }
 
+/* ========================================
+   MODO CLÁSSICO - UI PREMIUM
+   ======================================== */
+
+.classic-stats-panel {
+  /* SOLUÇÃO A: HUD no fluxo normal */
+  position: relative; /* Volta ao fluxo normal */
+  width: fit-content;
+  margin: 0 auto 16px auto; /* Centraliza horizontalmente + espaço abaixo */
+
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+
+  z-index: 10;
+  pointer-events: none;
+
+  animation: fadeSlideDown 0.5s ease-out;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 900;
+  color: #fbbf24;
+  text-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
+  font-family: 'Orbitron', 'Segoe UI', sans-serif;
+}
+
+.stat-divider {
+  width: 1px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+@keyframes fadeSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ========================================
+   MODO CLÁSSICO - VISUAL V1 (PALETA PREMIUM)
+   ======================================== */
+
+/* Paleta de 8 cores vibrantes com gradientes */
+.classic-color-1 {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: 2px solid #8b9dc3 !important;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3) !important;
+}
+
+.classic-color-2 {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%) !important;
+  border: 2px solid #f5a3c7 !important;
+  box-shadow: 0 4px 12px rgba(240, 147, 251, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3) !important;
+}
+
+.classic-color-3 {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%) !important;
+  border: 2px solid #7fc5fe !important;
+  box-shadow: 0 4px 12px rgba(79, 172, 254, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3) !important;
+}
+
+.classic-color-4 {
+  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%) !important;
+  border: 2px solid #6ef29a !important;
+  box-shadow: 0 4px 12px rgba(67, 233, 123, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3) !important;
+}
+
+.classic-color-5 {
+  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%) !important;
+  border: 2px solid #fc9eb4 !important;
+  box-shadow: 0 4px 12px rgba(250, 112, 154, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3) !important;
+}
+
+.classic-color-6 {
+  background: linear-gradient(135deg, #30cfd0 0%, #330867 100%) !important;
+  border: 2px solid #5dd9da !important;
+  box-shadow: 0 4px 12px rgba(48, 207, 208, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3) !important;
+}
+
+.classic-color-7 {
+  background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%) !important;
+  border: 2px solid #c0f1ef !important;
+  box-shadow: 0 4px 12px rgba(168, 237, 234, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3) !important;
+}
+
+.classic-color-8 {
+  background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%) !important;
+  border: 2px solid #ffb5b9 !important;
+  box-shadow: 0 4px 12px rgba(255, 154, 158, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Glow para peça ativa (preview no dock) */
+.classic-piece-glow {
+  animation: classicPieceGlow 1.5s ease-in-out infinite;
+}
+
+@keyframes classicPieceGlow {
+  0%, 100% {
+    filter: brightness(1) drop-shadow(0 0 8px rgba(255, 255, 255, 0.3));
+  }
+  50% {
+    filter: brightness(1.2) drop-shadow(0 0 16px rgba(255, 255, 255, 0.6));
+  }
+}
+
+/* Animação de posicionamento (pop) */
+.classic-pop {
+  animation: classicPop 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes classicPop {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Animação de line clear (pulse + shake) */
+.classic-line-clear {
+  animation: classicLineClear 0.4s ease-out;
+}
+
+@keyframes classicLineClear {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  25% {
+    transform: scale(1.15) rotate(2deg);
+    filter: brightness(1.5);
+  }
+  50% {
+    transform: scale(1.1) rotate(-2deg);
+    filter: brightness(1.8);
+  }
+  75% {
+    transform: scale(1.05) rotate(1deg);
+    filter: brightness(1.3);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    filter: brightness(1);
+  }
+}
+
+/* Partículas do line clear */
+.classic-particle {
+  position: fixed;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9999;
+  animation: classicParticleFly 0.6s ease-out forwards;
+}
+
+@keyframes classicParticleFly {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--tx), var(--ty)) scale(0);
+    opacity: 0;
+  }
+}
 
 

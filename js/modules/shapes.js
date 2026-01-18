@@ -137,21 +137,20 @@ export function getRandomPiece(customItems = null, useRPGStats = false, forceSim
                 }
             } 
             else {
-                // MODO CASUAL / CLÁSSICO (Padrão)
-                const itemType = weightedRandomItem(DEFAULT_ITEMS);
-                return {
-                    type: itemType.key === 'NORMAL' ? 'NORMAL' : 'ITEM',
-                    key: itemType.key,
-                    emoji: itemType.emoji
-                };
+                // MODO CLÁSSICO (Apenas blocos normais)
+                return { type: 'NORMAL' };
             }
         });
     });
 
+    // Gera um colorId único (1-8) para o Modo Clássico
+    const colorId = Math.floor(Math.random() * 8) + 1;
+
     return {
         name: shapeDef.name,
         matrix: matrix,
-        layout: layout
+        layout: layout,
+        colorId: colorId  // Cada peça tem UMA cor única
     };
 }
 
