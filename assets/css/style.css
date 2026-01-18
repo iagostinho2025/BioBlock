@@ -6585,11 +6585,10 @@ input:checked + .slider:before { transform: translateX(22px); }
    ========================================= */
 
 .achievements-layout {
-    background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+    /* Removed height: 100vh and overflow: hidden to work within .screen */
+    /* The .screen class already handles positioning and dimensions */
     display: flex;
     flex-direction: column;
-    height: 100vh;
-    overflow: hidden;
 }
 
 .achievements-header {
@@ -6679,12 +6678,7 @@ input:checked + .slider:before { transform: translateX(22px); }
     border-color: rgba(255, 255, 255, 0.2);
 }
 
-.achievements-scroll-area {
-    flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding: 12px 20px 80px 20px;
-}
+/* Removed duplicate - see consolidated version below */
 
 .achievement-item-icon {
     font-size: 48px;
@@ -6754,7 +6748,7 @@ input:checked + .slider:before { transform: translateX(22px); }
 }
 
 .btn-achievements-back {
-    position: fixed;
+    position: absolute; /* Changed from fixed to stay within .screen container */
     bottom: 20px;
     left: 20px;
     width: 56px;
@@ -6784,11 +6778,8 @@ input:checked + .slider:before { transform: translateX(22px); }
    ACHIEVEMENTS - AJUSTES FINAIS E REFINAMENTOS
    ========================================= */
 
-/* Override do layout principal */
-.achievements-layout {
-    background: linear-gradient(180deg, #0f172a 0%, #020617 100%);
-    position: relative;
-}
+/* Override do layout principal - REMOVED to prevent conflicts with .screen */
+/* The .screen class already handles background and positioning */
 
 /* Header com fundo gradiente suave */
 .achievements-header {
@@ -6798,20 +6789,17 @@ input:checked + .slider:before { transform: translateX(22px); }
 
 /* Área rolável com efeito de painel flutuante */
 .achievements-scroll-area {
+    flex: 1; /* Fill remaining space within .screen container */
     position: relative;
     background: linear-gradient(180deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.6) 100%);
     border-radius: 24px 24px 0 0;
     margin: 0 16px 0 16px;
     padding: 20px 16px 100px 16px;
-    box-shadow: 
+    box-shadow:
         0 -4px 20px rgba(0, 0, 0, 0.3),
         inset 0 1px 0 rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-bottom: none;
-}
-
-/* Garantir que apenas a área interna rola */
-.achievements-scroll-area {
     overflow-y: auto;
     overflow-x: hidden;
 }
@@ -6837,11 +6825,12 @@ input:checked + .slider:before { transform: translateX(22px); }
 
 /* Ajuste do botão voltar para safe area */
 .btn-achievements-back {
+    position: absolute; /* Ensure it stays within .screen */
     bottom: max(20px, env(safe-area-inset-bottom, 20px));
     left: max(20px, env(safe-area-inset-left, 20px));
     min-width: 48px;
     min-height: 48px;
-    z-index: 1000;
+    z-index: 100; /* Reduced from 1000 to stay within screen hierarchy */
 }
 
 /* Mobile adjustments */
