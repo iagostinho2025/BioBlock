@@ -163,5 +163,92 @@
         "feedback_excellent": "EXCELENTE!",
         "feedback_perfect": "PERFEITO!",
         "feedback_unreal": "IRREAL!!!"
-    }
+    },
+	"missions": {
+		"clear_2x": "Limpe 2 linhas de uma vez (2x)",
+		"combo_3x": "Faça combo 3x",
+		"score_500": "Alcance 500 pontos",
+		"placements_5": "Coloque 5 peças",
+		"clear_1x_5": "Limpe 5 linhas (qualquer)",
+		"reward_score": "+{value} pontos!",
+		"reward_multiplier": "Multiplicador {value}x!"
+	},
+	"achievements": {
+		"first_steps": {
+			"title": "Primeiros Passos",
+			"desc": "Complete seu primeiro nível"
+		},
+		"guardian_slayer": {
+			"title": "Caçador de Guardiões",
+			"desc": "Derrote o Guardião dos Mundos"
+		},
+		"classic_beginner": {
+			"title": "Iniciante Clássico",
+			"desc": "Faça 1.000 pontos no Modo Clássico"
+		},
+		"classic_skilled": {
+			"title": "Jogador Habilidoso",
+			"desc": "Faça 5.000 pontos no Modo Clássico"
+		},
+		"classic_master": {
+			"title": "Mestre Clássico",
+			"desc": "Faça 10.000 pontos no Modo Clássico"
+		},
+		"combo_rookie": {
+			"title": "Novato em Combos",
+			"desc": "Alcance um combo de 5x"
+		},
+		"combo_pro": {
+			"title": "Pro em Combos",
+			"desc": "Alcance um combo de 10x"
+		},
+		"combo_legend": {
+			"title": "Lenda dos Combos",
+			"desc": "Alcance um combo de 15x"
+		},
+		"line_clearer": {
+			"title": "Limpador de Linhas",
+			"desc": "Limpe 100 linhas no total"
+		},
+		"line_veteran": {
+			"title": "Veterano Limpador",
+			"desc": "Limpe 500 linhas no total"
+		},
+		"perfect_clear": {
+			"title": "Clear Perfeito",
+			"desc": "Limpe 4 linhas de uma vez"
+		},
+		"mission_starter": {
+			"title": "Iniciante em Missões",
+			"desc": "Complete 10 missões"
+		},
+		"mission_hunter": {
+			"title": "Caçador de Missões",
+			"desc": "Complete 50 missões"
+		},
+		"perfect_run": {
+			"title": "Run Perfeita",
+			"desc": "Complete todas as 3 missões em uma run"
+		},
+		"fire_conqueror": {
+			"title": "Conquistador do Fogo",
+			"desc": "Complete a Terra do Fogo"
+		},
+		"forest_survivor": {
+			"title": "Sobrevivente da Floresta",
+			"desc": "Sobreviva à Floresta Negra"
+		},
+		"final_victory": {
+			"title": "Vitória Final",
+			"desc": "Derrote o Mago Negro"
+		},
+		"speedrunner": {
+			"title": "Velocista",
+			"desc": "Complete um nível em menos de 60 segundos"
+		},
+		"no_powers": {
+			"title": "Habilidade Pura",
+			"desc": "Derrote o Mago Negro sem usar poderes"
+		}
+	}
 }

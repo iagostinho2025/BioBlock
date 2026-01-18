@@ -49,7 +49,7 @@
             </div>
             
             <nav class="sidebar-nav">
-                <button class="sidebar-item">
+                <button id="btn-achievements" class="sidebar-item">
                     <span class="icon">🏆</span> <span data-i18n="sidebar.achievements">Conquistas</span>
                 </button>
                 <button class="sidebar-item highlight-gold">
@@ -217,6 +217,48 @@
             </div>
         </div>
 
+        <!-- Tela de Conquistas -->
+        <div id="screen-achievements" class="screen hidden achievements-layout">
+            <!-- Header Fixo -->
+            <div class="achievements-header">
+                <h1 class="achievements-title">🏆 Conquistas</h1>
+
+                <!-- Barra de Progresso Global -->
+                <div class="achievements-progress-container">
+                    <div class="achievements-progress-bar">
+                        <div class="achievements-progress-fill" id="achievements-progress-fill" style="width: 0%"></div>
+                    </div>
+                    <div class="achievements-progress-text">
+                        <span id="achievements-unlocked">0</span>/<span id="achievements-total">19</span> <span data-i18n="sidebar.achievements">Conquistas</span>
+                    </div>
+                </div>
+
+                <!-- Abas de Filtro -->
+                <div class="achievements-tabs">
+                    <button class="achievements-tab active" data-filter="classic">
+                        <span data-i18n="menu.classic_title">Modo Clássico</span>
+                    </button>
+                    <button class="achievements-tab" data-filter="adventure">
+                        <span data-i18n="menu.adventure_title">Modo Aventura</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Lista Rolável de Conquistas -->
+            <div class="achievements-scroll-area">
+                <div id="achievements-list" class="achievements-list">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Botão de Voltar (Fixo no Rodapé) -->
+            <button id="btn-achievements-back" class="btn-achievements-back">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                    <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+                </svg>
+            </button>
+        </div>
+
         <div id="screen-settings" class="screen hidden settings-layout">
             <header class="settings-header">
                 <button id="btn-settings-back" class="btn-aaa-back pos-relative">
@@ -303,6 +345,22 @@
                 <div class="stat-item">
                     <div class="stat-label">BEST</div>
                     <div class="stat-value" id="classic-best">0</div>
+                </div>
+            </div>
+
+            <!-- Missões do Modo Clássico -->
+            <div id="classic-missions" class="classic-missions-container hidden">
+                <div class="mission-chip" data-mission-index="0">
+                    <span class="mission-text">Missão 1</span>
+                    <span class="mission-progress">0/3</span>
+                </div>
+                <div class="mission-chip" data-mission-index="1">
+                    <span class="mission-text">Missão 2</span>
+                    <span class="mission-progress">0/3</span>
+                </div>
+                <div class="mission-chip" data-mission-index="2">
+                    <span class="mission-text">Missão 3</span>
+                    <span class="mission-progress">0/3</span>
                 </div>
             </div>
 
@@ -411,5 +469,9 @@
             });
         }
     </script>
+
+    <!-- Achievement Notification (Top-right) -->
+    <div id="achievement-notification" class="achievement-notification"></div>
+
 </body>
 </html>

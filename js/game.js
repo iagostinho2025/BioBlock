@@ -5,6 +5,7 @@ import { PowersSystem } from './modules/powers.js';
 import { WORLDS, BONUS_LEVEL_CONFIG } from './modules/data/levels.js';
 import { BOSS_LOGIC } from './modules/logic/bosses.js';
 import { I18nSystem } from './modules/i18n.js'; // ADICIONADO: Importação do sistema de idiomas
+import { AchievementSystem } from './modules/achievements.js';
 
 const EMOJI_MAP = {
     // Itens Clássicos
@@ -59,11 +60,12 @@ export class Game {
         // Elementos DOM
         this.screenMenu = document.getElementById('screen-menu');
         this.screenLevels = document.getElementById('screen-levels');
-        this.screenStory = document.getElementById('screen-story'); 
+        this.screenStory = document.getElementById('screen-story');
         this.screenHeroSelect = document.getElementById('screen-hero-select'); // NOVO
 		this.screenCampfire = document.getElementById('screen-campfire'); // <--- ADICIONE ISSO
         this.screenGame = document.getElementById('screen-game');
-        this.screenSettings = document.getElementById('screen-settings'); 
+        this.screenSettings = document.getElementById('screen-settings');
+        this.screenAchievements = document.getElementById('screen-achievements'); 
         
         // Configurações Padrão
         this.settings = {
@@ -101,16 +103,25 @@ export class Game {
             comboStreak: 0,
             comboTimer: null,
             recordBeaten: false, // Flag para controlar se já mostrou mensagem de recorde
-            visualV1: true // Feature flag para efeitos visuais premium (true = ativado)
+            visualV1: true, // Feature flag para efeitos visuais premium (true = ativado)
+            missions: [],
+            missionsBestStreak: parseInt(localStorage.getItem('classic_missions_best_streak') || '0'),
+            missionsTotal: parseInt(localStorage.getItem('classic_missions_total') || '0'),
+            missionRewardActive: false,
+            missionRewardMultiplier: 1.0,
+            missionRewardEndTime: null
         };
 
         this.currentGoals = {}; 
         this.collected = {};
         this.score = 0;
         this.activeSnap = null; 
-        this.i18n = new I18nSystem(); 
+        this.i18n = new I18nSystem();
         this.preloadAssets();
-        
+
+        // Achievement System (optimized with batching)
+        this.achievements = null; // Lazy-loaded after i18n
+
         // Power-Ups
         this.powerUps = { bomb: 0, rotate: 0, swap: 0 };
         this.interactionMode = null; 
@@ -225,6 +236,13 @@ flushSaveGameState() {
     }
 }
 
+	// --- HELPER: GET CURRENT WORLD ---
+	getCurrentWorld() {
+		if (!this.currentLevelConfig) return null;
+
+		const world = WORLDS.find(w => w.levels.some(l => l.id === this.currentLevelConfig.id));
+		return world ? world.id.replace('_world', '') : null;
+	}
 
 	// --- NOVO SISTEMA DE HISTÓRIA E SELEÇÃO ---
 
@@ -573,7 +591,10 @@ flushSaveGameState() {
     async preloadAssets() {
         // ADICIONADO: Carrega idiomas antes de tudo
         await this.i18n.init();
-        
+
+        // Initialize Achievement System (after i18n)
+        this.achievements = new AchievementSystem(this);
+
         // Lista de imagens CRÍTICAS para a primeira impressão
         const imagesToLoad = [
             'assets/img/bg_world_select.webp',    // A imagem que estava faltando!
@@ -866,6 +887,23 @@ flushSaveGameState() {
                 this.showScreen(this.screenSettings);
             });
         }
+
+        const btnAchievements = document.getElementById('btn-achievements');
+        if (btnAchievements) {
+            btnAchievements.addEventListener('click', () => {
+                if(this.audio) this.audio.playClick();
+                toggleSidebar(false);
+                this.showAchievementsScreen();
+            });
+        }
+
+        const btnAchievementsBack = document.getElementById('btn-achievements-back');
+        if (btnAchievementsBack) {
+            btnAchievementsBack.addEventListener('click', () => {
+                if(this.audio) this.audio.playBack();
+                this.showScreen(this.screenMenu);
+            });
+        }
     }
 
     // --- NOVO: Lógica da tela de configurações ---
@@ -988,7 +1026,7 @@ flushSaveGameState() {
 
     activatePowerUp(type) {
         if (this.powerUps[type] <= 0) {
-            if(this.audio) this.audio.vibrate(50); 
+            if(this.audio) this.audio.vibrate(50);
             return;
         }
         if (this.interactionMode === type) {
@@ -998,18 +1036,24 @@ flushSaveGameState() {
         }
         // Swap é imediato
         if (type === 'swap') {
-            if(this.audio) this.audio.playClick(); 
+            if(this.audio) this.audio.playClick();
             this.powerUps.swap--;
             this.savePowerUps();
-            this.spawnNewHand(); 
+            this.spawnNewHand();
             this.effects.shakeScreen();
             this.renderControlsUI();
+
+            // Achievement tracking: mark power as used
+            this.powerUsedThisLevel = true;
             return;
         }
         // Ativa modo
         this.interactionMode = type;
         if(this.audio) this.audio.playClick();
         this.updateControlsVisuals();
+
+        // Achievement tracking: mark power as used
+        this.powerUsedThisLevel = true;
     }
 	
 	renderControlsUI() {
@@ -1426,6 +1470,121 @@ flushSaveGameState() {
         });
     }
 
+    showAchievementsScreen(initialFilter = 'classic') {
+        this.showScreen(this.screenAchievements);
+        this.toggleGlobalHeader(false);
+
+        if (!this.achievements) return;
+
+        // Store current filter
+        this.currentAchievementFilter = initialFilter;
+
+        // Setup tab filters (remove old listeners first)
+        const tabs = document.querySelectorAll('.achievements-tab');
+        tabs.forEach(tab => {
+            const newTab = tab.cloneNode(true);
+            tab.parentNode.replaceChild(newTab, tab);
+        });
+
+        // Add new listeners
+        document.querySelectorAll('.achievements-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Update active tab
+                document.querySelectorAll('.achievements-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+
+                // Get filter and update
+                const filter = tab.dataset.filter;
+                this.currentAchievementFilter = filter;
+
+                // Update stats for this mode
+                this.updateAchievementStats(filter);
+
+                // Render filtered achievements
+                this.renderAchievementsList(filter);
+
+                // Play click sound
+                if (this.audio) this.audio.playClick();
+            });
+        });
+
+        // Initial render
+        this.updateAchievementStats(initialFilter);
+        this.renderAchievementsList(initialFilter);
+    }
+
+    updateAchievementStats(mode) {
+        if (!this.achievements) return;
+
+        const allAchievements = this.achievements.getAll();
+
+        // Filter by mode
+        const filtered = allAchievements.filter(ach => ach.mode === mode);
+
+        // Calculate stats for this mode
+        const total = filtered.length;
+        const unlocked = filtered.filter(ach => ach.unlocked).length;
+        const percentage = total > 0 ? Math.floor((unlocked / total) * 100) : 0;
+
+        // Update UI
+        const unlockedEl = document.getElementById('achievements-unlocked');
+        const totalEl = document.getElementById('achievements-total');
+        const progressFillEl = document.getElementById('achievements-progress-fill');
+
+        if (unlockedEl) unlockedEl.textContent = unlocked;
+        if (totalEl) totalEl.textContent = total;
+        if (progressFillEl) {
+            progressFillEl.style.width = percentage + '%';
+        }
+    }
+
+    renderAchievementsList(mode) {
+        const listEl = document.getElementById('achievements-list');
+        if (!listEl || !this.achievements) return;
+
+        const allAchievements = this.achievements.getAll();
+
+        // Filter achievements by mode
+        const filtered = allAchievements.filter(ach => ach.mode === mode);
+
+        listEl.innerHTML = filtered.map(ach => {
+            const isUnlocked = ach.unlocked;
+            const progress = ach.progress || 0;
+            const target = ach.requirement.target || 1;
+            const percentage = Math.min((progress / target) * 100, 100);
+
+            // Calculate reward (diamonds based on tier)
+            const rewardMap = { bronze: 10, silver: 25, gold: 50, platinum: 100 };
+            const rewardAmount = rewardMap[ach.tier] || 10;
+
+            return `
+                <div class="achievement-item ${isUnlocked ? 'unlocked' : 'locked'}" data-category="${ach.category}">
+                    <div class="achievement-item-icon">${ach.icon}</div>
+                    <div class="achievement-item-content">
+                        <div class="achievement-item-header">
+                            <div class="achievement-item-title">${this.i18n.t(ach.title_key)}</div>
+                            <div class="achievement-item-tier ${ach.tier}">${ach.tier}</div>
+                        </div>
+                        <div class="achievement-item-desc">${this.i18n.t(ach.desc_key)}</div>
+                        ${!isUnlocked ? `
+                            <div class="achievement-item-progress">
+                                <div class="achievement-progress-bar-small">
+                                    <div class="achievement-progress-fill-small" style="width: ${percentage}%"></div>
+                                </div>
+                                <div class="achievement-progress-text-small">${progress}/${target}</div>
+                            </div>
+                        ` : ''}
+                    </div>
+                    <div class="achievement-item-reward">
+                        <div class="achievement-reward-icon">💎</div>
+                        <div class="achievement-reward-amount">×${rewardAmount}</div>
+                    </div>
+                    ${isUnlocked ? '<div class="achievement-item-checkmark">✓</div>' : ''}
+                </div>
+            `;
+        }).join('');
+    }
+
     openWorldMap(worldConfig) {
         const container = document.getElementById('levels-container');
         if(!container) return;
@@ -1779,6 +1938,12 @@ endGoalsBatch() {
             this.classicState.comboTimer = null;
         }
 
+        // Gerar missões aleatórias
+        this.classicState.missions = this.generateRandomMissions();
+        this.classicState.missionRewardActive = false;
+        this.classicState.missionRewardMultiplier = 1.0;
+        console.log('[MISSIONS] Missões geradas:', this.classicState.missions);
+
         this.clearTheme();
         this.showScreen(this.screenGame);
         this.resetGame();
@@ -1807,6 +1972,14 @@ endGoalsBatch() {
             statsPanel.style.display = ''; // Remove display: none se existir
             this.updateClassicUI();
         }
+
+        // Mostrar e atualizar missões
+        const missionsContainer = document.getElementById('classic-missions');
+        if (missionsContainer) {
+            missionsContainer.classList.remove('hidden');
+            missionsContainer.style.display = ''; // Remove display: none
+            this.updateMissionsUI();
+        }
     }
 
     startAdventureLevel(levelConfig) {
@@ -1820,6 +1993,12 @@ endGoalsBatch() {
         if (statsPanel) {
             statsPanel.classList.add('hidden');
             statsPanel.style.display = 'none'; // Garante que fique escondido
+        }
+
+        const missionsContainer = document.getElementById('classic-missions');
+        if (missionsContainer) {
+            missionsContainer.classList.add('hidden');
+            missionsContainer.style.display = 'none'; // Garante que fique escondido
         }
 
         // Mostrar área de objetivos do modo aventura
@@ -2025,8 +2204,8 @@ endGoalsBatch() {
     this.grid = Array(this.gridSize).fill().map(() => Array(this.gridSize).fill(null));
     this.score = 0;
     this.interactionMode = null;
-    this.comboState = { count: 0, lastClearTime: 0 }; 
-    
+    this.comboState = { count: 0, lastClearTime: 0 };
+
     this.heroState = {
         thalion: { unlocked: false, used: false },
         nyx: { unlocked: false, used: false },
@@ -2035,6 +2214,10 @@ endGoalsBatch() {
     };
 
     this.bossState.active = (this.currentLevelConfig?.type === 'boss');
+
+    // Achievement tracking: reset power usage flag
+    this.powerUsedThisLevel = false;
+
     this.loadPowerUps(); // Carrega o magnet aqui
     
     this.renderControlsUI(); 
@@ -2251,45 +2434,92 @@ ensureBoardCells() {
 }
 
 renderCell(div, cellData) {
-  // limpa estado visual anterior
-  div.className = 'cell';
-  div.innerText = '';
+  const prevKey = div._rk;
 
-  if (!cellData) return;
+  // VAZIO: sempre garantir que visual está limpo
+  if (!cellData) {
+    // Se já está realmente limpo e cache confirma, não faz nada
+    // (evita trabalho repetido)
+    if (prevKey === 'E' && div.className === 'cell' && div.textContent === '') return;
 
-  if (cellData.type === 'LAVA') {
-    div.classList.add('lava');
-    div.innerText = '🌋';
+    // Força reset visual (corrige desync quando outro trecho mexeu no DOM)
+    div.className = 'cell';
+    if (div.textContent) div.textContent = '';
+    div._rk = 'E';
     return;
   }
 
-  div.classList.add('filled');
-
-  if (cellData.key) div.classList.add('type-' + cellData.key.toLowerCase());
-  else this.applyColorClass(div, cellData);
-
-  // Visual V1: Usa o colorId JÁ armazenado na célula (propagado da peça)
-  if (this.currentMode === 'classic' && this.classicState.visualV1 && cellData.colorId) {
-    div.classList.add(`classic-color-${cellData.colorId}`);
+  // LAVA: caminho rápido
+  if (cellData.type === 'LAVA') {
+    const key = 'L';
+    if (prevKey !== key || div.className !== 'cell lava' || div.textContent !== '🌋') {
+      div.className = 'cell lava';
+      div.textContent = '🌋';
+      div._rk = key;
+    }
+    return;
   }
 
-  if (cellData.type === 'ITEM' || cellData.type === 'OBSTACLE') {
-    const emoji = cellData.emoji || EMOJI_MAP[cellData.key] || '?';
-    div.innerText = emoji;
+  const type = cellData.type || '';
+  const keyLower = cellData.key ? String(cellData.key).toLowerCase() : '';
+  const hasKey = !!keyLower;
+
+  let emoji = '';
+  if (type === 'ITEM' || type === 'OBSTACLE') {
+    emoji = cellData.emoji || (typeof EMOJI_MAP !== 'undefined' ? EMOJI_MAP[cellData.key] : '') || '?';
   }
+
+  const useClassicColor =
+    this.currentMode === 'classic' &&
+    this.classicState.visualV1 &&
+    cellData.colorId;
+
+  const colorId = useClassicColor ? cellData.colorId : 0;
+
+  const nextKey = `F|${type}|${keyLower}|${emoji}|${colorId}`;
+
+  // Se estado visual igual, não mexe
+  if (prevKey === nextKey) return;
+
+  // Reset controlado e redesenha
+  div.className = 'cell filled';
+
+  if (hasKey) {
+    div.classList.add('type-' + keyLower);
+  } else {
+    this.applyColorClass(div, cellData);
+  }
+
+  if (colorId) {
+    div.classList.add(`classic-color-${colorId}`);
+  }
+
+  if (emoji) div.textContent = emoji;
+  else if (div.textContent) div.textContent = '';
+
+  div._rk = nextKey;
 }
 
 
-    renderGrid() {
+
+
+   renderGrid() {
   this.ensureBoardCells();
 
-  for (let r = 0; r < this.gridSize; r++) {
-    for (let c = 0; c < this.gridSize; c++) {
-      const div = this._boardCells[r * this.gridSize + c];
-      this.renderCell(div, this.grid[r][c]);
-	  this._emptyCellsDirty = true;
+  const size = this.gridSize;
+  const cells = this._boardCells; // já existe no seu código
+  const grid = this.grid;
+
+  for (let r = 0; r < size; r++) {
+    const row = grid[r];
+    const base = r * size;
+    for (let c = 0; c < size; c++) {
+      this.renderCell(cells[base + c], row[c]);
     }
   }
+
+  // Antes você marcava em toda célula; isso é custo inútil
+  this._emptyCellsDirty = true;
 }
 
 
@@ -2459,29 +2689,90 @@ renderCell(div, cellData) {
 
 
     attachDragEvents(el, piece) {
-	if (el._dragAttached) return;   // ✅ evita duplicar listeners
+    if (el._dragAttached) return;
     el._dragAttached = true;
+
     let isDragging = false;
     let clone = null;
+
     let cellPixelSize = 0;
     let boardRect = null;
 
-    // Cache para evitar leituras repetidas de layout
     let halfW = 0;
     let halfH = 0;
 
-    // rAF throttle para reduzir custo do onMove
     let rafId = 0;
     let lastClientX = 0;
     let lastClientY = 0;
 
+    const GAP = 4;
+    const PADDING = 8;
+    const VISUAL_OFFSET_Y = 80;
+
+    const getPoint = (evt) => {
+        const t = evt.touches ? evt.touches[0] : evt;
+        return { x: t.clientX, y: t.clientY };
+    };
+    const getChangedPoint = (evt) => {
+        const t = evt.changedTouches ? evt.changedTouches[0] : evt;
+        return { x: t.clientX, y: t.clientY };
+    };
+
+    const cleanupGlobalListeners = () => {
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('touchmove', onMove);
+        window.removeEventListener('mouseup', onEnd);
+        window.removeEventListener('touchend', onEnd);
+        window.removeEventListener('touchcancel', onEnd);
+        window.removeEventListener('blur', onEnd);
+    };
+
+    const ensureGlobalListeners = () => {
+        window.addEventListener('mousemove', onMove, { passive: false });
+        window.addEventListener('touchmove', onMove, { passive: false });
+        window.addEventListener('mouseup', onEnd, { passive: true });
+        window.addEventListener('touchend', onEnd, { passive: true });
+        window.addEventListener('touchcancel', onEnd, { passive: true });
+        window.addEventListener('blur', onEnd, { passive: true });
+    };
+
+    const moveCloneToPointer = () => {
+        // Top-left do clone baseado no ponteiro
+        const x = (lastClientX - halfW);
+        const y = (lastClientY - halfH - VISUAL_OFFSET_Y);
+
+        // ✅ NÃO sobrescreve transform (preserva scale/rotate do CSS)
+        // translate = propriedade individual de transform
+        clone.style.translate = `${x}px ${y}px`;
+    };
+
+    const scheduleMove = () => {
+        if (rafId) return;
+        rafId = requestAnimationFrame(() => {
+            rafId = 0;
+            if (!isDragging || !clone) return;
+
+            moveCloneToPointer();
+
+            // Fonte do ghost (para updateGhostPreview otimizado)
+            this._lastPointerX = lastClientX;
+            this._lastPointerY = lastClientY - VISUAL_OFFSET_Y;
+
+            this.updateGhostPreview(clone, boardRect, cellPixelSize, piece);
+        });
+    };
+
     const onStart = (e) => {
         if (this.interactionMode === 'rotate') return;
         if (isDragging) return;
+        if (e.cancelable) e.preventDefault();
 
         if (this.audio) this.audio.playDrag();
+
         isDragging = true;
         this.activeSnap = null;
+
+        ensureGlobalListeners();
 
         boardRect = this.boardEl.getBoundingClientRect();
 
@@ -2489,7 +2780,7 @@ renderCell(div, cellData) {
         if (firstCell) {
             cellPixelSize = firstCell.getBoundingClientRect().width;
         } else {
-            cellPixelSize = (boardRect.width - 16) / 8;
+            cellPixelSize = (boardRect.width - (PADDING * 2)) / 8;
         }
 
         clone = el.cloneNode(true);
@@ -2498,31 +2789,39 @@ renderCell(div, cellData) {
 
         const cols = piece.matrix[0].length;
         const rows = piece.matrix.length;
+
         clone.style.width = (cols * cellPixelSize) + 'px';
         clone.style.height = (rows * cellPixelSize) + 'px';
         clone.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
         clone.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
-        clone.style.gap = '4px';
+        clone.style.gap = `${GAP}px`;
 
-        // IMPORTANTE: append antes de medir, pra offsetWidth/Height serem confiáveis
+        // Base fixa na viewport; movimento via translate
+        clone.style.position = 'fixed';
+        clone.style.left = '0px';
+        clone.style.top = '0px';
+        clone.style.margin = '0';
+        clone.style.willChange = 'translate, transform, opacity';
+
+        // Posição inicial offscreen (sem mexer em transform)
+        clone.style.translate = `-9999px -9999px`;
+
         document.body.appendChild(clone);
 
-        // Cache das metades (evita offsetWidth/Height no move)
-        halfW = clone.offsetWidth / 2;
-        halfH = clone.offsetHeight / 2;
+        // Mede 1x
+        halfW = clone.offsetWidth * 0.5;
+        halfH = clone.offsetHeight * 0.5;
 
-        const touch = e.touches ? e.touches[0] : e;
-        lastClientX = touch.clientX;
-        lastClientY = touch.clientY;
+        const p = getPoint(e);
+        lastClientX = p.x;
+        lastClientY = p.y;
 
-        // Move inicial (mantém seu moveClone, mas sem custo repetido)
-        // Aqui replicamos a lógica do moveClone com halfW/halfH cacheados.
-        // Não usamos transform para não conflitar com o CSS scale.
-        const VISUAL_OFFSET_Y = 80;
-        clone.style.left = (lastClientX - halfW) + 'px';
-        clone.style.top = (lastClientY - halfH - VISUAL_OFFSET_Y) + 'px';
+        // Atualiza ponteiro (ghost)
+        this._lastPointerX = lastClientX;
+        this._lastPointerY = lastClientY - VISUAL_OFFSET_Y;
 
-        // Ghost inicial
+        // Primeira posição imediata
+        moveCloneToPointer();
         this.updateGhostPreview(clone, boardRect, cellPixelSize, piece);
 
         el.style.opacity = '0';
@@ -2530,43 +2829,31 @@ renderCell(div, cellData) {
 
     const onMove = (e) => {
         if (!isDragging || !clone) return;
-
-        // Evita scroll no mobile
         if (e.cancelable) e.preventDefault();
 
-        const touch = e.touches ? e.touches[0] : e;
-        lastClientX = touch.clientX;
-        lastClientY = touch.clientY;
+        const p = getPoint(e);
+        lastClientX = p.x;
+        lastClientY = p.y;
 
-        // Throttle via rAF
-        if (rafId) return;
-        rafId = requestAnimationFrame(() => {
-            rafId = 0;
-
-            // Move (mesma lógica do moveClone, sem reler offsetWidth/Height)
-            const VISUAL_OFFSET_Y = 80;
-            clone.style.left = (lastClientX - halfW) + 'px';
-            clone.style.top = (lastClientY - halfH - VISUAL_OFFSET_Y) + 'px';
-
-            this.updateGhostPreview(clone, boardRect, cellPixelSize, piece);
-        });
+        scheduleMove();
     };
 
     const onEnd = (e) => {
         if (!isDragging) return;
 
-        // Para qualquer frame pendente
         if (rafId) {
             cancelAnimationFrame(rafId);
             rafId = 0;
         }
 
+        cleanupGlobalListeners();
+
         this.clearPredictionHighlights();
         isDragging = false;
 
-        const touch = e.changedTouches ? e.changedTouches[0] : e;
-        const dropX = touch.clientX;
-        const dropY = touch.clientY;
+        const p = getChangedPoint(e);
+        const dropX = p.x;
+        const dropY = p.y;
 
         let placed = false;
         if (this.activeSnap && this.activeSnap.valid) {
@@ -2581,16 +2868,17 @@ renderCell(div, cellData) {
 
             el.remove();
 
-            // Remove da memória
-            const index = parseInt(el.dataset.index);
-            if (!isNaN(index)) {
-                this.currentHand[index] = null;
-            }
+            const index = parseInt(el.dataset.index, 10);
+            if (!isNaN(index)) this.currentHand[index] = null;
 
             let hasWon = false;
 
             try {
                 const damageDealt = this.checkLines(dropX, dropY);
+
+                if (this.currentMode === 'classic') {
+                    this.updateMissionProgress('placement', {});
+                }
 
                 if (this.currentMode === 'adventure') {
                     if (this.bossState.active) {
@@ -2602,18 +2890,19 @@ renderCell(div, cellData) {
                 } else {
                     hasWon = this.checkVictoryConditions();
                 }
-            } catch (e) { console.error(e); }
+            } catch (err) {
+                console.error(err);
+            }
 
             if (this.bossState.active && !hasWon) {
                 const bossId = this.currentLevelConfig.boss?.id;
-                if (BOSS_LOGIC && BOSS_LOGIC[bossId] && BOSS_LOGIC[bossId].onTurnEnd) {
+                if (typeof BOSS_LOGIC !== 'undefined' && BOSS_LOGIC && BOSS_LOGIC[bossId] && BOSS_LOGIC[bossId].onTurnEnd) {
                     BOSS_LOGIC[bossId].onTurnEnd(this);
                 }
             }
 
             if (!hasWon) {
                 const remainingPieces = this.dockEl.querySelectorAll('.draggable-piece');
-
                 if (remainingPieces.length === 0) {
                     this.spawnNewHand();
                 } else {
@@ -2625,20 +2914,22 @@ renderCell(div, cellData) {
             el.style.opacity = '1';
         }
 
-        if (clone) clone.remove();
+        if (clone) {
+            clone.remove();
+            clone = null;
+        }
+
         this.clearGhostPreview();
         this.activeSnap = null;
     };
 
-    el.addEventListener('mousedown', onStart);
+    el.addEventListener('mousedown', onStart, { passive: false });
     el.addEventListener('touchstart', onStart, { passive: false });
 
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('touchmove', onMove, { passive: false });
-
-    window.addEventListener('mouseup', onEnd);
-    window.addEventListener('touchend', onEnd);
+    // Segurança extra caso a peça seja removida no meio do drag por troca de tela
+    el._dragCleanup = cleanupGlobalListeners;
 }
+
 
     
     moveClone(clone, clientX, clientY) {
@@ -2650,54 +2941,65 @@ renderCell(div, cellData) {
     }
 
     updateGhostPreview(clone, boardRect, cellSize, piece) {
-    const cloneRect = clone.getBoundingClientRect();
     const GAP = 4;
     const PADDING = 8;
 
-    const relativeX = (cloneRect.left + cloneRect.width / 2) - (boardRect.left + PADDING);
-    const relativeY = (cloneRect.top + cloneRect.height / 2) - (boardRect.top + PADDING);
+    // Se por algum motivo ainda não houve move (primeiro frame), não faz nada
+    const px = this._lastPointerX;
+    const py = this._lastPointerY;
+    if (px == null || py == null) return;
+
+    // Centro lógico = ponteiro (evita getBoundingClientRect)
+    const relativeX = px - (boardRect.left + PADDING);
+    const relativeY = py - (boardRect.top + PADDING);
 
     const effectiveSize = cellSize + GAP;
+    const invSize = 1 / effectiveSize;
 
-    const exactCol = (relativeX / effectiveSize) - (piece.matrix[0].length / 2);
-    const exactRow = (relativeY / effectiveSize) - (piece.matrix.length / 2);
+    const exactCol = (relativeX * invSize) - (piece.matrix[0].length * 0.5);
+    const exactRow = (relativeY * invSize) - (piece.matrix.length * 0.5);
 
     const baseR = Math.round(exactRow);
     const baseC = Math.round(exactCol);
 
-    // Mantém o mesmo conjunto de candidatos (mesma jogabilidade)
+    // Mesmo conjunto de candidatos (mesma jogabilidade)
     const candidates = [
-        { r: baseR,     c: baseC     },
-        { r: baseR + 1, c: baseC     },
-        { r: baseR - 1, c: baseC     },
-        { r: baseR,     c: baseC + 1 },
-        { r: baseR,     c: baseC - 1 }
+        baseR,     baseC,
+        baseR + 1, baseC,
+        baseR - 1, baseC,
+        baseR,     baseC + 1,
+        baseR,     baseC - 1
     ];
 
-    let bestMatch = null;
-    let minDist2 = Infinity; // distância ao quadrado
+    let bestR = 0, bestC = 0;
+    let bestValid = false;
+    let minDist2 = Infinity;
+    let found = false;
 
-    for (const cand of candidates) {
-        const dr = cand.r - exactRow;
-        const dc = cand.c - exactCol;
+    for (let i = 0; i < candidates.length; i += 2) {
+        const r = candidates[i];
+        const c = candidates[i + 1];
+
+        const dr = r - exactRow;
+        const dc = c - exactCol;
         const dist2 = (dr * dr) + (dc * dc);
 
-        const isValid = this.canPlace(cand.r, cand.c, piece);
+        const valid = this.canPlace(r, c, piece);
 
-        if (isValid) {
-            if (!bestMatch || !bestMatch.valid || dist2 < minDist2) {
-                bestMatch = { r: cand.r, c: cand.c, valid: true };
+        if (valid) {
+            if (!found || !bestValid || dist2 < minDist2) {
+                bestR = r; bestC = c; bestValid = true;
                 minDist2 = dist2;
+                found = true;
             }
-        } else if (!bestMatch && dist2 < (0.6 * 0.6)) {
-            // Mesmo limiar visual de antes (0.6), só que ao quadrado
-            bestMatch = { r: cand.r, c: cand.c, valid: false };
-            // não precisa setar minDist2 aqui (não é usado para inválido)
+        } else if (!found && dist2 < 0.36) {
+            // Mesmo limiar visual (0.6²)
+            bestR = r; bestC = c; bestValid = false;
+            found = true;
         }
     }
 
-    // Se não há match, só limpa quando antes havia algo (evita trabalho repetido)
-    if (!bestMatch) {
+    if (!found) {
         if (this.activeSnap !== null) {
             this.activeSnap = null;
             this.clearGhostPreview();
@@ -2708,40 +3010,39 @@ renderCell(div, cellData) {
         return;
     }
 
-    // Chave do snap (inclui valid) — se não mudou, não redesenha
-    const ghostKey = `${bestMatch.r},${bestMatch.c},${bestMatch.valid ? 1 : 0}`;
+    const ghostKey = `${bestR},${bestC},${bestValid ? 1 : 0}`;
 
     if (this._lastGhostKey === ghostKey) {
-        // Nada mudou: mantém ghost/predição do jeito que já está
-        this.activeSnap = bestMatch;
+        this.activeSnap = { r: bestR, c: bestC, valid: bestValid };
         return;
     }
 
-    // Mudou: agora sim limpamos e redesenhamos
     this._lastGhostKey = ghostKey;
-    this.activeSnap = bestMatch;
+    this.activeSnap = { r: bestR, c: bestC, valid: bestValid };
 
     this.clearGhostPreview();
     this.clearPredictionHighlights();
 
-    this.drawGhost(bestMatch.r, bestMatch.c, piece, bestMatch.valid);
+    this.drawGhost(bestR, bestC, piece, bestValid);
 
-    // Predição: só quando válido e quando a posição mudou
-    if (bestMatch.valid) {
-        const predKey = `${bestMatch.r},${bestMatch.c}`;
+    if (bestValid) {
+        const predKey = `${bestR},${bestC}`;
         if (this._lastPredKey !== predKey) {
             this._lastPredKey = predKey;
 
-            const prediction = this.predictClears(bestMatch.r, bestMatch.c, piece);
-            if ((prediction.rows && prediction.rows.length > 0) || (prediction.cols && prediction.cols.length > 0)) {
+            const prediction = this.predictClears(bestR, bestC, piece);
+            if (
+                (prediction.rows && prediction.rows.length > 0) ||
+                (prediction.cols && prediction.cols.length > 0)
+            ) {
                 this.drawPredictionHighlights(prediction);
             }
         }
     } else {
-        // Se virou inválido, resetamos a predição
         this._lastPredKey = null;
     }
 }
+
 
     
     // --- PREVISÃO DE LINHAS (EFEITO DOURADO) ---
@@ -2794,137 +3095,250 @@ renderCell(div, cellData) {
 
     // 2. Cria barras contínuas sobre as linhas/colunas detectadas
     drawPredictionHighlights({ rows, cols }) {
-        this.clearPredictionHighlights(); // Limpa anteriores
+    // Inicializa pool uma vez (8 horizontais + 8 verticais)
+    // DEPENDÊNCIAS INTERNAS CRIADAS AQUI:
+    // this._predLinesH = Array(8)
+    // this._predLinesV = Array(8)
+    if (!this._predLinesH || !this._predLinesV) {
+        this._predLinesH = new Array(8);
+        this._predLinesV = new Array(8);
 
-        // --- DESENHA LINHAS (Horizontais) ---
-        rows.forEach(rowIndex => {
-            const line = document.createElement('div');
-            line.classList.add('prediction-line');
-            
-            // Lógica CSS Grid: 
-            // grid-row: linha inicial / span 1 (ocupa 1 altura)
-            // grid-column: 1 / -1 (vai do começo ao fim da largura)
-            line.style.gridRowStart = rowIndex + 1; // Grid começa em 1, array em 0
-            line.style.gridRowEnd = `span 1`;
-            line.style.gridColumnStart = 1;
-            line.style.gridColumnEnd = -1; // -1 significa "até o final"
-            
-            this.boardEl.appendChild(line);
-        });
+        for (let i = 0; i < 8; i++) {
+            const h = document.createElement('div');
+            h.className = 'prediction-line';
+            // Horizontal: ocupa a largura toda
+            h.style.gridColumnStart = 1;
+            h.style.gridColumnEnd = -1;
+            h.style.gridRowEnd = 'span 1';
+            h.style.display = 'none';
+            this.boardEl.appendChild(h);
+            this._predLinesH[i] = h;
 
-        // --- DESENHA COLUNAS (Verticais) ---
-        cols.forEach(colIndex => {
-            const line = document.createElement('div');
-            line.classList.add('prediction-line');
-            
-            // Lógica CSS Grid:
-            // grid-column: coluna inicial / span 1
-            // grid-row: 1 / -1 (vai do topo até embaixo)
-            line.style.gridColumnStart = colIndex + 1;
-            line.style.gridColumnEnd = `span 1`;
-            line.style.gridRowStart = 1;
-            line.style.gridRowEnd = -1;
-            
-            this.boardEl.appendChild(line);
-        });
+            const v = document.createElement('div');
+            v.className = 'prediction-line';
+            // Vertical: ocupa a altura toda
+            v.style.gridRowStart = 1;
+            v.style.gridRowEnd = -1;
+            v.style.gridColumnEnd = 'span 1';
+            v.style.display = 'none';
+            this.boardEl.appendChild(v);
+            this._predLinesV[i] = v;
+        }
     }
+
+    // Normaliza entradas para evitar exceções
+    const rList = Array.isArray(rows) ? rows : [];
+    const cList = Array.isArray(cols) ? cols : [];
+
+    // Oculta tudo primeiro (custo constante: 16 elementos)
+    // (bem mais barato que querySelectorAll + remove + GC)
+    for (let i = 0; i < 8; i++) {
+        const h = this._predLinesH[i];
+        if (h.style.display !== 'none') h.style.display = 'none';
+
+        const v = this._predLinesV[i];
+        if (v.style.display !== 'none') v.style.display = 'none';
+    }
+
+    // Desenha horizontais (cap em 8)
+    const rh = rList.length < 8 ? rList.length : 8;
+    for (let i = 0; i < rh; i++) {
+        const rowIndex = rList[i];
+        if (rowIndex < 0 || rowIndex > 7) continue;
+
+        const line = this._predLinesH[i];
+        line.style.gridRowStart = (rowIndex + 1);
+        line.style.display = 'block';
+    }
+
+    // Desenha verticais (cap em 8)
+    const cv = cList.length < 8 ? cList.length : 8;
+    for (let i = 0; i < cv; i++) {
+        const colIndex = cList[i];
+        if (colIndex < 0 || colIndex > 7) continue;
+
+        const line = this._predLinesV[i];
+        line.style.gridColumnStart = (colIndex + 1);
+        line.style.display = 'block';
+    }
+}
 
     // 3. Remove as barras criadas
     clearPredictionHighlights() {
+    // Se pool ainda não existe, cai no método antigo (segurança)
+    if (!this._predLinesH || !this._predLinesV) {
         const lines = this.boardEl.querySelectorAll('.prediction-line');
         lines.forEach(el => el.remove());
+        return;
     }
+
+    // Apenas oculta (zero GC, zero DOM churn)
+    for (let i = 0; i < 8; i++) {
+        const h = this._predLinesH[i];
+        if (h && h.style.display !== 'none') h.style.display = 'none';
+
+        const v = this._predLinesV[i];
+        if (v && v.style.display !== 'none') v.style.display = 'none';
+    }
+}
 
     drawGhost(r, c, piece, isValid) {
     const className = isValid ? 'ghost-valid' : 'ghost-invalid';
 
-    // Inicializa cache de índices usados pelo ghost (se não existir)
+    // Cache de índices usados pelo ghost
+    // Mantido por compatibilidade com clearGhostPreview
     if (!this._ghostIdxs) this._ghostIdxs = [];
+    const ghostIdxs = this._ghostIdxs;
 
-    for (let i = 0; i < piece.layout.length; i++) {
-        for (let j = 0; j < piece.layout[i].length; j++) {
-            if (!piece.layout[i][j]) continue;
+    const layout = piece.layout;
+    const gridSize = this.gridSize;
+    const boardChildren = this.boardEl.children;
+
+    // Cache de flags (evita if repetido em loop)
+    const useClassicColor =
+        this.currentMode === 'classic' &&
+        this.classicState.visualV1 &&
+        piece.colorId;
+
+    const colorClass = useClassicColor
+        ? `classic-color-${piece.colorId}`
+        : null;
+
+    // Loop direto, sem alocações
+    for (let i = 0, rows = layout.length; i < rows; i++) {
+        const row = layout[i];
+        for (let j = 0, cols = row.length; j < cols; j++) {
+            if (!row[j]) continue;
 
             const targetR = r + i;
             const targetC = c + j;
 
-            if (targetR >= 0 && targetR < this.gridSize && targetC >= 0 && targetC < this.gridSize) {
-                const idx = targetR * 8 + targetC;
-                const cell = this.boardEl.children[idx];
-                if (cell) {
-                    cell.classList.add('ghost', className);
-
-                    // Visual V1: Aplica a cor da peça no ghost preview
-                    if (this.currentMode === 'classic' && this.classicState.visualV1 && piece.colorId) {
-                        cell.classList.add(`classic-color-${piece.colorId}`);
-                    }
-
-                    this._ghostIdxs.push(idx); // ✅ registra pra limpar depois
-                }
+            // Bound check rápido
+            if (
+                targetR < 0 ||
+                targetR >= gridSize ||
+                targetC < 0 ||
+                targetC >= gridSize
+            ) {
+                continue;
             }
+
+            const idx = (targetR << 3) + targetC; // r * 8 + c (bitshift)
+            const cell = boardChildren[idx];
+            if (!cell) continue;
+
+            // Classe base do ghost
+            cell.classList.add('ghost', className);
+
+            // Visual clássico (somente se ativo)
+            if (colorClass) {
+                cell.classList.add(colorClass);
+            }
+
+            ghostIdxs.push(idx);
         }
     }
 }
 
+
 clearGhostPreview() {
-  const idxs = this._ghostIdxs;
-  if (!idxs || idxs.length === 0) return;
+    const idxs = this._ghostIdxs;
+    if (!idxs || idxs.length === 0) return;
 
-  for (let k = 0; k < idxs.length; k++) {
-    const idx = idxs[k];
-    const cell = this.boardEl.children[idx];
-    if (!cell) continue;
+    const boardChildren = this.boardEl.children;
+    const grid = this.grid;
+    const gridSize = this.gridSize;
 
-    // remove só o estado de ghost
-    cell.classList.remove('ghost', 'ghost-valid', 'ghost-invalid');
+    const isClassicVisual =
+        this.currentMode === 'classic' &&
+        this.classicState.visualV1;
 
-    // NÃO remover a cor se agora virou célula preenchida de verdade
-    const r = Math.floor(idx / this.gridSize);
-    const c = idx % this.gridSize;
-    const isActuallyFilled = this.grid[r]?.[c] !== null;
+    for (let k = 0; k < idxs.length; k++) {
+        const idx = idxs[k];
+        const cell = boardChildren[idx];
+        if (!cell) continue;
 
-    if (!isActuallyFilled && this.currentMode === 'classic' && this.classicState.visualV1) {
-      for (let i = 1; i <= 8; i++) cell.classList.remove(`classic-color-${i}`);
+        // Remove estado base do ghost
+        cell.classList.remove('ghost', 'ghost-valid', 'ghost-invalid');
+
+        // Calcula r/c sem divisão cara repetida
+        const r = (idx / gridSize) | 0; // floor
+        const c = idx - (r * gridSize);
+
+        // Se a célula virou preenchida de verdade, não mexe na cor
+        if (grid[r]?.[c] !== null) continue;
+
+        // Visual clássico: remove SOMENTE a cor aplicada ao ghost
+        if (isClassicVisual) {
+            // Procura rapidamente pela classe classic-color-*
+            // (bem mais barato que loop fixo 1..8)
+            const classList = cell.classList;
+            for (let i = 0; i < classList.length; i++) {
+                const cls = classList[i];
+                if (cls.startsWith('classic-color-')) {
+                    classList.remove(cls);
+                    break; // só uma cor possível
+                }
+            }
+        }
     }
-  }
 
-  idxs.length = 0;
+    // Limpa lista para o próximo frame
+    idxs.length = 0;
 }
+
 
 
 
     canPlace(r, c, piece) {
     // Cache da forma da peça (feito uma vez por peça)
-    // Obs: usa piece.layout como fonte de verdade (igual ao original)
+    // Mantém o formato filled = [[dr,dc], ...] para compatibilidade
     let cache = piece._placeCache;
-    if (!cache) {
+
+    // Recria cache se estiver ausente OU incompleto/inválido
+    // (evita bugs se outro trecho mexeu em _placeCache)
+    const layout = piece.layout;
+    if (
+        !cache ||
+        !cache.filled ||
+        !Array.isArray(cache.filled) ||
+        cache.rows == null ||
+        cache.cols == null ||
+        cache._layoutRef !== layout
+    ) {
         const filled = [];
-        const rows = piece.layout.length;
-        const cols = piece.layout[0]?.length || 0;
+        const rows = layout.length;
+        const cols = layout[0]?.length || 0;
 
         for (let i = 0; i < rows; i++) {
-            const row = piece.layout[i];
+            const row = layout[i];
             for (let j = 0; j < cols; j++) {
                 if (row[j]) filled.push([i, j]);
             }
         }
 
-        cache = piece._placeCache = { rows, cols, filled };
+        cache = piece._placeCache = {
+            rows,
+            cols,
+            filled,
+            _layoutRef: layout // garante consistência se layout mudar (rotação, etc.)
+        };
     }
 
-    // Bounds check (rápido): se a bounding box da peça sai do grid, já falha.
-    // Como nosso cache considera o retângulo total do layout, isso é equivalente ao seu loop original
-    // (ele acabaria batendo em out-of-bounds em algum bloco preenchido).
+    const gridSize = this.gridSize;
+
+    // Bounds check rápido
     if (r < 0 || c < 0) return false;
-    if (r + cache.rows > this.gridSize) return false;
-    if (c + cache.cols > this.gridSize) return false;
+    if (r + cache.rows > gridSize) return false;
+    if (c + cache.cols > gridSize) return false;
 
     // Verifica apenas as células preenchidas
     const g = this.grid;
-    for (let k = 0; k < cache.filled.length; k++) {
-        const dr = cache.filled[k][0];
-        const dc = cache.filled[k][1];
-        if (g[r + dr][c + dc] !== null) return false;
+    const filled = cache.filled;
+
+    for (let k = 0; k < filled.length; k++) {
+        const pos = filled[k];
+        if (g[r + pos[0]][c + pos[1]] !== null) return false;
     }
 
     return true;
@@ -2932,135 +3346,242 @@ clearGhostPreview() {
 
 
     placePiece(r, c, piece) {
-        if (!this.canPlace(r, c, piece)) return false;
+    if (!this.canPlace(r, c, piece)) return false;
 
-        for (let i = 0; i < piece.layout.length; i++) {
-            for (let j = 0; j < piece.layout[i].length; j++) {
-                const cellData = piece.layout[i][j];
+    const layout = piece.layout;
+    const grid = this.grid;
+    const size = this.gridSize;
 
-                if (cellData) {
-                    const targetR = r + i;
-                    const targetC = c + j;
+    const isClassicV1 =
+        this.currentMode === 'classic' &&
+        this.classicState.visualV1 &&
+        piece.colorId;
 
-                    // Propaga o colorId da PEÇA para a célula no grid
-                    if (this.currentMode === 'classic' && this.classicState.visualV1 && piece.colorId) {
-                        cellData.colorId = piece.colorId;
-                    }
+    const pieceColorId = isClassicV1 ? piece.colorId : 0;
 
-                    this.grid[targetR][targetC] = cellData;
+    // Para remover o classic-pop em batch (1 timer ao invés de N)
+    // DEPENDÊNCIA INTERNA (auto-criada):
+    // this._classicPopCells = []
+    let popCells = null;
+    if (isClassicV1) {
+        popCells = this._classicPopCells || (this._classicPopCells = []);
+    }
 
-                    const cellEl = this.boardEl.children[targetR * 8 + targetC];
+    // Atualiza grid + render incremental
+    for (let i = 0, rows = layout.length; i < rows; i++) {
+        const row = layout[i];
+        for (let j = 0, cols = row.length; j < cols; j++) {
+            const cellData = row[j];
+            if (!cellData) continue;
 
-                    // Limpa classes anteriores mas preserva 'cell'
-                    cellEl.className = 'cell filled';
+            const targetR = r + i;
+            const targetC = c + j;
 
-                    // Visual V1: Aplica cor PRIMEIRO (antes de applyColorClass)
-                    if (this.currentMode === 'classic' && this.classicState.visualV1 && cellData.colorId) {
-                        cellEl.classList.add(`classic-color-${cellData.colorId}`);
-                        cellEl.classList.add('classic-pop');
-                        setTimeout(() => cellEl.classList.remove('classic-pop'), 300);
-                    } else {
-                        // Modo aventura: usa applyColorClass normal
-                        this.applyColorClass(cellEl, cellData);
-                    }
+            // bounds safety (canPlace já garante, mas mantém robustez)
+            if (targetR < 0 || targetR >= size || targetC < 0 || targetC >= size) continue;
 
-                    if (cellData.type === 'ITEM') {
-                        const emoji = cellData.emoji || EMOJI_MAP[cellData.key] || '?';
-                        cellEl.innerText = emoji;
-                    }
+            // Propaga o colorId da peça para o dado no grid (somente no clássico V1)
+            if (pieceColorId) {
+                cellData.colorId = pieceColorId;
+            }
+
+            grid[targetR][targetC] = cellData;
+
+            // Render incremental: mantém consistência com cache do renderCell
+            const idx = (targetR * size) + targetC;
+            const cellEl = this._boardCells
+                ? this._boardCells[idx]
+                : this.boardEl.children[idx];
+
+            if (cellEl) {
+                // Importante: invalida cache dessa célula para renderCell redesenhar
+                cellEl._rk = null;
+                this.renderCell(cellEl, cellData);
+
+                // Visual V1: pop (sem N setTimeouts)
+                if (pieceColorId) {
+                    cellEl.classList.add('classic-pop');
+                    popCells.push(cellEl);
                 }
             }
         }
-		this._emptyCellsDirty = true;
-        return true;
     }
+
+    // Remove classic-pop em batch (1 timer total)
+    if (popCells && popCells.length) {
+        if (this._classicPopTimer) clearTimeout(this._classicPopTimer);
+        this._classicPopTimer = setTimeout(() => {
+            for (let i = 0; i < popCells.length; i++) {
+                popCells[i].classList.remove('classic-pop');
+            }
+            popCells.length = 0;
+            this._classicPopTimer = 0;
+        }, 300);
+    }
+
+    this._emptyCellsDirty = true;
+    return true;
+}
+
 
     checkLines(dropX, dropY) {
     let linesCleared = 0;
     let damageDealt = false;
+
+    const size = this.gridSize;
+    const grid = this.grid;
+
+    // 1) Identifica linhas/colunas completas (sem .every e sem closures)
     const rowsToClear = [];
     const colsToClear = [];
 
-    // 1. Identifica o que precisa ser limpo
-    for (let r = 0; r < this.gridSize; r++) {
-        if (this.grid[r].every(val => val !== null)) rowsToClear.push(r);
-    }
-    for (let c = 0; c < this.gridSize; c++) {
+    for (let r = 0; r < size; r++) {
+        const row = grid[r];
         let full = true;
-        for (let r = 0; r < this.gridSize; r++) {
-            if (this.grid[r][c] === null) { full = false; break; }
+        for (let c = 0; c < size; c++) {
+            if (row[c] === null) { full = false; break; }
+        }
+        if (full) rowsToClear.push(r);
+    }
+
+    for (let c = 0; c < size; c++) {
+        let full = true;
+        for (let r = 0; r < size; r++) {
+            if (grid[r][c] === null) { full = false; break; }
         }
         if (full) colsToClear.push(c);
     }
 
-    // 2. CAPTURA VISUAL (O "Pulo do Gato" AAA)
-    // Antes de apagar os dados, criamos clones visuais dos elementos que vão sumir.
+    // Se nada a limpar, sai cedo (mantém retorno original)
+    if (rowsToClear.length === 0 && colsToClear.length === 0) {
+        return false;
+    }
+
+    // 2) CAPTURA VISUAL (sem getBoundingClientRect por célula)
     const visualExplosions = [];
-    const uniquePos = new Set(); // Evita duplicatas em cruzamentos de linha/coluna
 
-    const addVisual = (r, c) => {
-        const key = `${r},${c}`;
-        if (uniquePos.has(key)) return;
-        uniquePos.add(key);
+    const boardChildren = this.boardEl.children;
 
-        const idx = r * 8 + c;
-        const cell = this.boardEl.children[idx];
+    // Estes valores precisam estar coerentes com o CSS do board:
+    const GAP = 4;
+    const PADDING = 8;
 
-        // Só clona se tiver algo visível lá
-        if (cell && (cell.classList.contains('filled') || cell.classList.contains('lava'))) {
-            const rect = cell.getBoundingClientRect();
-            const clone = cell.cloneNode(true);
+    const boardRect = this.boardEl.getBoundingClientRect();
 
-            // Visual V1: Adiciona animação de line clear antes de explodir
-            if (this.currentMode === 'classic' && this.classicState.visualV1) {
-                cell.classList.add('classic-line-clear');
-                setTimeout(() => cell.classList.remove('classic-line-clear'), 400);
-            }
+    // mede 1x (ok) para ter o tamanho real da célula
+    let cellSizePx = 0;
+    const firstCell = this.boardEl.querySelector('.cell');
+    if (firstCell) {
+        cellSizePx = firstCell.getBoundingClientRect().width;
+    } else {
+        // fallback seguro
+        cellSizePx = (boardRect.width - (PADDING * 2) - (GAP * (size - 1))) / size;
+    }
 
-            // Configura o clone para ser "fixed" (solto na tela)
-            clone.classList.add('cell-explosion'); // Classe CSS que vamos criar
-            clone.style.position = 'fixed';
-            clone.style.left = `${rect.left}px`;
-            clone.style.top = `${rect.top}px`;
-            clone.style.width = `${rect.width}px`;
-            clone.style.height = `${rect.height}px`;
-            clone.style.margin = '0';
-            clone.style.zIndex = '9999';
-            clone.style.pointerEvents = 'none'; // Não interfere no clique
-            clone.style.transition = 'none';    // Reseta transições antigas
-            clone.style.transform = 'none';
+    const step = cellSizePx + GAP;
 
-            // Guarda a cor para as partículas
-            const colorClass = Array.from(cell.classList).find(cls => cls.startsWith('type-') || cls.startsWith('classic-color-') || cls === 'lava') || 'type-normal';
+    // Evita duplicatas em cruzamentos usando bitmap (64) em vez de Set de strings
+    const seen = new Uint8Array(size * size);
 
-            visualExplosions.push({ clone, rect, colorClass, cell });
-        }
+    // Para o Visual V1: remover a classe em batch (1 timer)
+    const isClassicV1 = (this.currentMode === 'classic' && this.classicState.visualV1);
+    const classicCellsToPulse = isClassicV1 ? [] : null;
+
+    const computeRectForCell = (r, c) => {
+        const left = boardRect.left + PADDING + (c * step);
+        const top = boardRect.top + PADDING + (r * step);
+        return { left, top, width: cellSizePx, height: cellSizePx };
     };
 
-    rowsToClear.forEach(r => { for (let c = 0; c < this.gridSize; c++) addVisual(r, c); });
-    colsToClear.forEach(c => { for (let r = 0; r < this.gridSize; r++) addVisual(r, c); });
+    const extractColorClass = (cell) => {
+        const cl = cell.classList;
+        for (let i = 0; i < cl.length; i++) {
+            const s = cl[i];
+            if (s === 'lava') return 'lava';
+            if (s.length >= 5 && s[0] === 't' && s[1] === 'y' && s[2] === 'p' && s[3] === 'e' && s[4] === '-') return s;
+            if (s.startsWith('classic-color-')) return s;
+        }
+        return 'type-normal';
+    };
 
-    // 3. LIMPEZA LÓGICA (Acontece instantaneamente)
-	this.beginGoalsBatch();
-    rowsToClear.forEach(r => { if (this.clearRow(r)) damageDealt = true; linesCleared++; });
-    colsToClear.forEach(c => { if (this.clearCol(c)) damageDealt = true; linesCleared++; });
-	this.endGoalsBatch();
+    const addVisual = (r, c) => {
+        const idx = (r * size) + c;
+        if (seen[idx]) return;
+        seen[idx] = 1;
+
+        const cell = boardChildren[idx];
+        if (!cell) return;
+        if (!(cell.classList.contains('filled') || cell.classList.contains('lava'))) return;
+
+        if (isClassicV1) {
+            cell.classList.add('classic-line-clear');
+            classicCellsToPulse.push(cell);
+        }
+
+        const rect = computeRectForCell(r, c);
+        const clone = cell.cloneNode(true);
+
+        clone.classList.add('cell-explosion');
+        clone.style.position = 'fixed';
+        clone.style.left = `${rect.left}px`;
+        clone.style.top = `${rect.top}px`;
+        clone.style.width = `${rect.width}px`;
+        clone.style.height = `${rect.height}px`;
+        clone.style.margin = '0';
+        clone.style.zIndex = '9999';
+        clone.style.pointerEvents = 'none';
+        clone.style.transition = 'none';
+        clone.style.transform = 'none';
+        clone.style.willChange = 'transform, opacity';
+
+        const colorClass = extractColorClass(cell);
+
+        visualExplosions.push({ clone, rect, colorClass });
+    };
+
+    for (let i = 0; i < rowsToClear.length; i++) {
+        const r = rowsToClear[i];
+        for (let c = 0; c < size; c++) addVisual(r, c);
+    }
+    for (let i = 0; i < colsToClear.length; i++) {
+        const c = colsToClear[i];
+        for (let r = 0; r < size; r++) addVisual(r, c);
+    }
+
+    if (isClassicV1 && classicCellsToPulse.length) {
+        setTimeout(() => {
+            for (let i = 0; i < classicCellsToPulse.length; i++) {
+                classicCellsToPulse[i].classList.remove('classic-line-clear');
+            }
+        }, 400);
+    }
+
+    // 3) LIMPEZA LÓGICA (mantida)
+    this.beginGoalsBatch();
+    for (let i = 0; i < rowsToClear.length; i++) {
+        if (this.clearRow(rowsToClear[i])) damageDealt = true;
+        linesCleared++;
+    }
+    for (let i = 0; i < colsToClear.length; i++) {
+        if (this.clearCol(colsToClear[i])) damageDealt = true;
+        linesCleared++;
+    }
+    this.endGoalsBatch();
 
     if (linesCleared > 0) {
-        // Atualiza o grid real para vazio (os clones estarão por cima tapando o buraco)
         this.renderGrid();
 
-        // 4. EXECUÇÃO DA ANIMAÇÃO (Wave otimizado)
-        // Em vez de N setTimeout(i*20), usamos um scheduler via requestAnimationFrame.
-        // Mantém o mesmo efeito, mas reduz timers e micro-engasgos no mobile.
-        const WAVE_STEP_MS = 20;     // mesmo "i * 20" de antes
-        const REMOVE_AFTER_MS = 400; // mesmo 400ms de antes
+        // 4) EXECUÇÃO DA ANIMAÇÃO (wave via rAF, sem N timeouts)
+        const WAVE_STEP_MS = 20;
+        const REMOVE_AFTER_MS = 400;
 
         let startTime = performance.now();
         let nextIndex = 0;
 
+        // ✅ Correção: remoção robusta (sem bug de pop/swap)
+        const removals = []; // { node, removeAt }
+
         const tick = (t) => {
-            // Quantos itens já "deveriam" ter disparado até agora?
             const shouldHave = Math.min(
                 visualExplosions.length,
                 Math.floor((t - startTime) / WAVE_STEP_MS) + 1
@@ -3071,101 +3592,108 @@ clearGhostPreview() {
 
                 document.body.appendChild(item.clone);
 
-                // Força o navegador a reconhecer o elemento antes de animar
                 requestAnimationFrame(() => {
                     item.clone.classList.add('explode');
-                    // Solta as partículas sincronizadas com o estouro do clone
                     this.spawnExplosion(item.rect, item.colorClass);
 
-                    // Visual V1: Partículas coloridas
-                    if (this.currentMode === 'classic' && this.classicState.visualV1) {
+                    if (isClassicV1) {
                         this.spawnClassicParticles(item.rect, item.colorClass);
                     }
                 });
 
-                // Remove o clone do DOM depois que a animação acaba
-                setTimeout(() => item.clone.remove(), REMOVE_AFTER_MS);
+                removals.push({ node: item.clone, removeAt: t + REMOVE_AFTER_MS });
             }
 
-            if (nextIndex < visualExplosions.length) {
+            // ✅ Remoção correta por índice (lista pequena → custo irrelevante)
+            for (let i = removals.length - 1; i >= 0; i--) {
+                if (t >= removals[i].removeAt) {
+                    const n = removals[i].node;
+                    if (n && n.parentNode) n.remove();
+                    removals.splice(i, 1);
+                }
+            }
+
+            if (nextIndex < visualExplosions.length || removals.length > 0) {
                 requestAnimationFrame(tick);
             }
         };
 
         requestAnimationFrame(tick);
 
-        // Lógica de Score e Combos (Mantida igual)
+        // 5) Lógica de Score/Combos (mantida igual)
         const now = Date.now();
         if (now - (this.comboState.lastClearTime || 0) <= 5000) this.comboState.count++;
         else this.comboState.count = 1;
         this.comboState.lastClearTime = now;
 
-        // Sistema de Pontuação do Modo Clássico
         if (this.currentMode === 'classic') {
             const baseScore = this.calculateClassicScore(linesCleared);
             const comboMultiplier = 1 + (Math.min(this.classicState.comboStreak, 5) * 0.5);
-            const totalScore = Math.floor(baseScore * comboMultiplier);
+            const missionMultiplier = this.classicState.missionRewardActive ? this.classicState.missionRewardMultiplier : 1.0;
+            const totalScore = Math.floor(baseScore * comboMultiplier * missionMultiplier);
 
             this.classicState.score += totalScore;
             this.classicState.linesCleared += linesCleared;
             this.classicState.comboStreak++;
 
-            // Salvar Best Score
             if (this.classicState.score > this.classicState.bestScore) {
                 this.classicState.bestScore = this.classicState.score;
                 localStorage.setItem('classic_best_score', this.classicState.bestScore.toString());
 
-                // Mostrar mensagem apenas na PRIMEIRA vez que bate o recorde
                 if (!this.classicState.recordBeaten) {
                     this.classicState.recordBeaten = true;
                     console.log(`[CLASSIC] 🏆 NEW RECORD! ${this.classicState.bestScore} pontos`);
 
-                    // Feedback visual de novo recorde
                     if (this.effects && this.effects.showFloatingTextCentered) {
                         this.effects.showFloatingTextCentered('NEW RECORD! 🏆', 'feedback-gold');
                     }
                 }
             }
 
-            // Sistema de Níveis
             const newLevel = Math.floor(this.classicState.linesCleared / 10) + 1;
             if (newLevel > this.classicState.level) {
                 this.classicState.level = newLevel;
                 console.log(`[CLASSIC] LEVEL UP! Nível ${this.classicState.level}`);
 
-                // Verifica se método triggerScreenFlash existe antes de chamar
                 if (this.effects && this.effects.triggerScreenFlash) {
-                    this.effects.triggerScreenFlash('#a855f7'); // Flash roxo
+                    this.effects.triggerScreenFlash('#a855f7');
                 }
             }
 
             console.log(`[CLASSIC] Score: ${this.classicState.score}, Lines: ${this.classicState.linesCleared}, Combo: ${this.classicState.comboStreak}x, +${totalScore}pts`);
 
-            // Atualizar UI em tempo real
             this.updateClassicUI();
 
-            // Feedback visual de combo
-            this.showClassicFeedback();
+            this.updateMissionProgress('line_clear', { count: linesCleared });
+            this.updateMissionProgress('combo', {});
+            this.updateMissionProgress('score', {});
 
-            // Resetar timer de combo
+            // Achievement tracking (batched, optimized)
+            if (this.achievements) {
+                this.achievements.trackEvent('classic_score', { score: this.classicState.score });
+                this.achievements.trackEvent('combo_streak', { streak: this.classicState.comboStreak });
+                this.achievements.trackEvent('line_clear', { count: linesCleared });
+
+                // Quad clear (Perfect Clear)
+                if (linesCleared === 4) {
+                    this.achievements.trackEvent('line_clear', { count: 4 });
+                }
+            }
+
+            this.showClassicFeedback();
             this.resetClassicComboTimer();
 
-            // Perfect Clear Bonus
             if (this.isPerfectClear()) {
                 this.classicState.score += 2000;
                 console.log('[CLASSIC] 💎 PERFECT CLEAR! +2000 pontos');
 
-                // Flash dourado
                 if (this.effects && this.effects.triggerScreenFlash) {
                     this.effects.triggerScreenFlash('#fbbf24');
                 }
-
-                // Mensagem visual
                 if (this.effects && this.effects.showFloatingTextCentered) {
                     this.effects.showFloatingTextCentered('PERFECT CLEAR! +2000', 'feedback-epic');
                 }
 
-                // Atualizar UI com o bonus
                 this.updateClassicUI();
             }
         }
@@ -3175,7 +3703,6 @@ clearGhostPreview() {
         if (this.currentMode === 'adventure' && this.heroState) {
             let unlockedSomething = false;
 
-            // (Lógica de desbloqueio de heróis mantida...)
             if (comboCount >= 2 && (!this.heroState.thalion.unlocked || this.heroState.thalion.used)) {
                 this.heroState.thalion.unlocked = true; this.heroState.thalion.used = false;
                 this.effects.showFloatingTextCentered(this.i18n.t('game.hero_thalion_ready'), "feedback-gold");
@@ -3187,7 +3714,6 @@ clearGhostPreview() {
                 unlockedSomething = true;
             }
 
-            // Player e Mage logic...
             this.heroState.player.lineCounter = (this.heroState.player.lineCounter || 0) + linesCleared;
             if ((this.heroState.player.lineCounter >= 5 || comboCount >= 4) && (!this.heroState.player.unlocked || this.heroState.player.used)) {
                 if (this.heroState.player.lineCounter >= 5) this.heroState.player.lineCounter = 0;
@@ -3210,7 +3736,6 @@ clearGhostPreview() {
             }
         }
 
-        // Sons e Feedbacks
         if (this.bossState.active) {
             this.effects.showComboFeedback(linesCleared, comboCount, 'normal');
             if (this.audio) this.audio.playBossClear(linesCleared);
@@ -3237,6 +3762,10 @@ clearGhostPreview() {
     return damageDealt;
 }
 
+
+
+
+
     calculateClassicScore(linesCleared) {
         switch(linesCleared) {
             case 1: return 100;
@@ -3255,6 +3784,156 @@ clearGhostPreview() {
         if (scoreEl) scoreEl.textContent = this.classicState.score.toLocaleString();
         if (levelEl) levelEl.textContent = this.classicState.level;
         if (bestEl) bestEl.textContent = this.classicState.bestScore.toLocaleString();
+    }
+
+    updateMissionsUI() {
+        const container = document.getElementById('classic-missions');
+        if (!container) return;
+
+        this.classicState.missions.forEach((mission, idx) => {
+            const chip = container.children[idx];
+            if (!chip) return;
+
+            const textEl = chip.querySelector('.mission-text');
+            const progressEl = chip.querySelector('.mission-progress');
+
+            textEl.textContent = mission.text;
+            progressEl.textContent = `${mission.progress}/${mission.target}`;
+
+            if (mission.completed) {
+                chip.classList.add('completed');
+            } else {
+                chip.classList.remove('completed');
+            }
+        });
+    }
+
+    updateMissionProgress(eventType, eventData) {
+        if (this.currentMode !== 'classic') return;
+
+        this.classicState.missions.forEach(mission => {
+            if (mission.completed) return;
+
+            let shouldUpdate = false;
+
+            switch (mission.type) {
+                case 'line_clear':
+                    // BUG FIX: Conta QUANTAS VEZES limpou N linhas (ex: limpar 2 linhas 2x = 2/2)
+                    if (eventType === 'line_clear' && eventData.count >= mission.lineTarget) {
+                        mission.progress = Math.min(mission.progress + 1, mission.target);
+                        shouldUpdate = true;
+                    }
+                    break;
+
+                case 'combo_achievement':
+                    // Detecta quando o combo atinge o alvo (ex: combo 3x = comboStreak >= 3)
+                    if (eventType === 'combo') {
+                        const target = mission.comboTarget || mission.target;
+                        if (this.classicState.comboStreak >= target) {
+                            mission.progress = 1;
+                            shouldUpdate = true;
+                        }
+                    }
+                    break;
+
+                case 'score':
+                    if (eventType === 'score') {
+                        mission.progress = Math.min(this.classicState.score, mission.target);
+                        shouldUpdate = true;
+                    }
+                    break;
+
+                case 'placements':
+                    if (eventType === 'placement') {
+                        mission.progress = Math.min(mission.progress + 1, mission.target);
+                        shouldUpdate = true;
+                    }
+                    break;
+
+                case 'line_clear_count':
+                    // BUG FIX: Soma QUANTAS linhas foram limpadas, não apenas +1
+                    if (eventType === 'line_clear') {
+                        mission.progress = Math.min(mission.progress + eventData.count, mission.target);
+                        shouldUpdate = true;
+                    }
+                    break;
+            }
+
+            if (shouldUpdate && mission.progress >= mission.target && !mission.completed) {
+                mission.completed = true;
+                this.onMissionCompleted(mission);
+                console.log(`[MISSIONS] Missão concluída: ${mission.text}`);
+            }
+        });
+
+        this.updateMissionsUI();
+    }
+
+    onMissionCompleted(mission) {
+        const reward = mission.reward;
+
+        // Feedback visual e sonoro
+        if (this.audio) {
+            this.audio.playMissionComplete(); // Som customizado de missão completada
+        }
+
+        if (this.effects && this.effects.triggerScreenFlash) {
+            this.effects.triggerScreenFlash('#22c55e');
+        }
+
+        if (reward.type === 'score') {
+            this.classicState.score += reward.value;
+            console.log(`[MISSIONS] Recompensa: +${reward.value} pontos`);
+
+            if (this.effects && this.effects.showFloatingTextCentered) {
+                const text = this.i18n.t('missions.reward_score').replace('{value}', reward.value);
+                this.effects.showFloatingTextCentered(text, 'feedback-gold');
+            }
+        } else if (reward.type === 'multiplier') {
+            this.classicState.missionRewardActive = true;
+            this.classicState.missionRewardMultiplier = reward.value;
+            this.classicState.missionRewardEndTime = Date.now() + reward.duration;
+
+            console.log(`[MISSIONS] Recompensa: Multiplicador ${reward.value}x por ${reward.duration / 1000}s`);
+
+            if (this.effects && this.effects.showFloatingTextCentered) {
+                const text = this.i18n.t('missions.reward_multiplier').replace('{value}', reward.value);
+                this.effects.showFloatingTextCentered(text, 'feedback-purple');
+            }
+
+            // Timer para desativar multiplicador
+            setTimeout(() => {
+                if (Date.now() >= this.classicState.missionRewardEndTime) {
+                    this.classicState.missionRewardActive = false;
+                    this.classicState.missionRewardMultiplier = 1.0;
+                    console.log('[MISSIONS] Multiplicador expirado');
+                }
+            }, reward.duration);
+        }
+
+        // Atualizar estatísticas
+        this.classicState.missionsTotal++;
+        localStorage.setItem('classic_missions_total', this.classicState.missionsTotal.toString());
+
+        // Verificar streak (3 missões concluídas)
+        const completedCount = this.classicState.missions.filter(m => m.completed).length;
+        if (completedCount > this.classicState.missionsBestStreak) {
+            this.classicState.missionsBestStreak = completedCount;
+            localStorage.setItem('classic_missions_best_streak', completedCount.toString());
+            console.log(`[MISSIONS] Nova melhor sequência: ${completedCount}/3`);
+        }
+
+        // Achievement tracking for missions
+        if (this.achievements) {
+            this.achievements.trackEvent('mission_complete', {});
+
+            // Perfect run (all 3 missions completed)
+            if (completedCount === 3) {
+                this.achievements.trackEvent('mission_perfect_run', {});
+            }
+        }
+
+        this.updateClassicUI();
     }
 
     spawnClassicParticles(rect, colorClass) {
@@ -3331,6 +4010,22 @@ clearGhostPreview() {
                 duration: 800
             });
         }
+    }
+
+    generateMissionPool() {
+        return [
+            { id: 'clear_2x', type: 'line_clear', target: 2, lineTarget: 2, text: this.i18n.t('missions.clear_2x'), progress: 0, completed: false, reward: { type: 'score', value: 200 } },
+            { id: 'combo_3x', type: 'combo_achievement', target: 1, comboTarget: 3, text: this.i18n.t('missions.combo_3x'), progress: 0, completed: false, reward: { type: 'multiplier', value: 1.1, duration: 30000 } },
+            { id: 'score_500', type: 'score', target: 500, text: this.i18n.t('missions.score_500'), progress: 0, completed: false, reward: { type: 'score', value: 100 } },
+            { id: 'placements_5', type: 'placements', target: 5, text: this.i18n.t('missions.placements_5'), progress: 0, completed: false, reward: { type: 'multiplier', value: 1.1, duration: 30000 } },
+            { id: 'clear_1x_5', type: 'line_clear_count', target: 5, text: this.i18n.t('missions.clear_1x_5'), progress: 0, completed: false, reward: { type: 'score', value: 300 } }
+        ];
+    }
+
+    generateRandomMissions() {
+        const pool = this.generateMissionPool();
+        const shuffled = pool.sort(() => Math.random() - 0.5);
+        return shuffled.slice(0, 3).map(m => ({ ...m })); // Clone para evitar referência
     }
 
     isPerfectClear() {
@@ -3511,80 +4206,91 @@ clearGhostPreview() {
 
 
     checkMovesAvailable() {
-    // Mantém seu comportamento
     if (!this.dockEl) return true;
 
-    // Coleta peças existentes na mão
+    const hand = this.currentHand;
+    if (!hand || hand.length === 0) return true;
+
     const pieces = [];
-    for (let i = 0; i < this.currentHand.length; i++) {
-        const p = this.currentHand[i];
+    for (let i = 0; i < hand.length; i++) {
+        const p = hand[i];
         if (p) pieces.push(p);
     }
     if (pieces.length === 0) return true;
 
     const N = this.gridSize;
+    const grid = this.grid;
 
-    // 1) Garante cache de células vazias
-    // Recalcula se não existir ou se estiver marcado como "dirty"
-    if (!this._emptyCells || this._emptyCellsDirty) {
-        const empties = [];
+    // Cache de vazios como idx
+    if (!this._emptyCellsIdx || this._emptyCellsDirty) {
+        const emptiesIdx = [];
         for (let r = 0; r < N; r++) {
-            const row = this.grid[r];
+            const row = grid[r];
             for (let c = 0; c < N; c++) {
-                if (row[c] === null) empties.push([r, c]);
+                if (row[c] === null) emptiesIdx.push(r * N + c);
             }
         }
-        this._emptyCells = empties;
+        this._emptyCellsIdx = emptiesIdx;
         this._emptyCellsDirty = false;
-
-        // Se não há vazios, não existe jogada
-        if (empties.length === 0) return false;
+        if (emptiesIdx.length === 0) return false;
     }
 
-    const empties = this._emptyCells;
+    const emptiesIdx = this._emptyCellsIdx;
 
-    // 2) Para cada peça, tentamos posições candidatas:
-    // Em vez de testar todo (r,c), testamos ancorando a peça em torno das células vazias.
-    for (const piece of pieces) {
-        const rows = piece.layout?.length || piece.matrix?.length || 0;
-        const cols = piece.layout?.[0]?.length || piece.matrix?.[0]?.length || 0;
+    // visited stamping (sem Set)
+    const visitedSize = N * N;
+    if (!this._movesVisited || this._movesVisited.length !== visitedSize) {
+        this._movesVisited = new Int32Array(visitedSize);
+        this._movesVisitedStamp = 1;
+    }
+    const visited = this._movesVisited;
+
+    for (let pi = 0; pi < pieces.length; pi++) {
+        const piece = pieces[pi];
+
+        const layout = piece.layout || piece.matrix;
+        const rows = layout?.length || 0;
+        const cols = layout?.[0]?.length || 0;
         if (!rows || !cols) continue;
 
-        // Otimização: usamos a lista de células preenchidas cacheada do canPlace
-        // (se já existe). Se não existir ainda, canPlace vai criar.
-        const cache = piece._placeCache;
-        const filled = cache?.filled;
+        // Monta filledCells LOCALMENTE (não toca em piece._placeCache)
+        // Formato flat: [dr,dc,dr,dc...]
+        const filledFlat = [];
+        for (let dr = 0; dr < rows; dr++) {
+            const row = layout[dr];
+            for (let dc = 0; dc < cols; dc++) {
+                if (row[dc]) filledFlat.push(dr, dc);
+            }
+        }
+        if (filledFlat.length === 0) continue;
 
-        // Se ainda não existe cache, chama canPlace uma vez em uma posição qualquer
-        // só para garantir que o cache exista (sem custo real significativo).
-        if (!filled) this.canPlace(0, 0, piece);
+        // stamp por peça
+        let stamp = (this._movesVisitedStamp | 0) + 1;
+        if (stamp === 0x7fffffff) {
+            visited.fill(0);
+            stamp = 1;
+        }
+        this._movesVisitedStamp = stamp;
 
-        const filledCells = piece._placeCache?.filled || [];
+        for (let e = 0; e < emptiesIdx.length; e++) {
+            const empty = emptiesIdx[e];
+            const er = (empty / N) | 0;
+            const ec = empty - (er * N);
 
-        // Para evitar testar mil vezes a mesma âncora, usamos um Set por peça
-        const tested = new Set();
-
-        // Para cada célula vazia, ela deve ser coberta por algum bloco da peça.
-        // Então para cada bloco (dr,dc) tentamos ancorar em (r - dr, c - dc).
-        for (let e = 0; e < empties.length; e++) {
-            const er = empties[e][0];
-            const ec = empties[e][1];
-
-            for (let k = 0; k < filledCells.length; k++) {
-                const dr = filledCells[k][0];
-                const dc = filledCells[k][1];
+            for (let k = 0; k < filledFlat.length; k += 2) {
+                const dr = filledFlat[k];
+                const dc = filledFlat[k + 1];
 
                 const baseR = er - dr;
                 const baseC = ec - dc;
 
-                // Bounds rápidos (evita chamar canPlace à toa)
                 if (baseR < 0 || baseC < 0) continue;
                 if (baseR + rows > N) continue;
                 if (baseC + cols > N) continue;
 
-                const key = (baseR * 16) + baseC; // 16 é seguro p/ grid 8 (chave compacta)
-                if (tested.has(key)) continue;
-                tested.add(key);
+                const key = baseR * N + baseC;
+                if (visited[key] === stamp) continue;
+                visited[key] = stamp;
 
                 if (this.canPlace(baseR, baseC, piece)) return true;
             }
@@ -3596,14 +4302,43 @@ clearGhostPreview() {
 
 
 
+
     gameWon(collectedGoals = {}, earnedRewards = []) {
         this.clearSavedGame();
 
-        if(this.audio) { 
+        // Achievement tracking for level/boss completion
+        if (this.achievements && this.currentLevelConfig) {
+            const levelId = this.currentLevelConfig.id;
+
+            // Track level complete
+            this.achievements.trackEvent('level_complete', { level: levelId });
+
+            // Track boss defeat
+            if (this.bossState.active && this.currentLevelConfig.boss) {
+                const bossId = this.currentLevelConfig.boss.id;
+                const noPowers = !this.powerUsedThisLevel;
+
+                this.achievements.trackEvent('boss_defeat', {
+                    boss: bossId,
+                    noPowers: noPowers
+                });
+
+                // Track world completion (final bosses of each world)
+                const worldBosses = ['ignis', 'aracna', 'golem_king', 'warlord_grok', 'dark_wizard'];
+                if (worldBosses.includes(bossId)) {
+                    const worldId = this.getCurrentWorld();
+                    if (worldId) {
+                        this.achievements.trackEvent('world_complete', { world: worldId });
+                    }
+                }
+            }
+        }
+
+        if(this.audio) {
             this.audio.stopMusic();
-            this.audio.playClear(3); 
-            if(this.audio.playSound && this.audio.playVictory) this.audio.playVictory(); 
-            this.audio.vibrate([100, 50, 100, 50, 200]); 
+            this.audio.playClear(3);
+            if(this.audio.playSound && this.audio.playVictory) this.audio.playVictory();
+            this.audio.vibrate([100, 50, 100, 50, 200]);
         }
         
         const modal = document.getElementById('modal-victory');

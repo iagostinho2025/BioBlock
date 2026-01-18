@@ -163,5 +163,92 @@
         "feedback_excellent": "EXCELLENT!",
         "feedback_perfect": "PERFECT!",
         "feedback_unreal": "UNREAL!!!"
-    }
+    },
+	"missions": {
+		"clear_2x": "Clear 2 lines at once (2x)",
+		"combo_3x": "Make combo 3x",
+		"score_500": "Reach 500 points",
+		"placements_5": "Place 5 pieces",
+		"clear_1x_5": "Clear 5 lines (any)",
+		"reward_score": "+{value} points!",
+		"reward_multiplier": "Multiplier {value}x!"
+	},
+	"achievements": {
+		"first_steps": {
+			"title": "First Steps",
+			"desc": "Complete your first level"
+		},
+		"guardian_slayer": {
+			"title": "Guardian Slayer",
+			"desc": "Defeat the Guardian of the Worlds"
+		},
+		"classic_beginner": {
+			"title": "Classic Beginner",
+			"desc": "Score 1,000 points in Classic Mode"
+		},
+		"classic_skilled": {
+			"title": "Skilled Player",
+			"desc": "Score 5,000 points in Classic Mode"
+		},
+		"classic_master": {
+			"title": "Classic Master",
+			"desc": "Score 10,000 points in Classic Mode"
+		},
+		"combo_rookie": {
+			"title": "Combo Rookie",
+			"desc": "Reach a 5x combo"
+		},
+		"combo_pro": {
+			"title": "Combo Pro",
+			"desc": "Reach a 10x combo"
+		},
+		"combo_legend": {
+			"title": "Combo Legend",
+			"desc": "Reach a 15x combo"
+		},
+		"line_clearer": {
+			"title": "Line Clearer",
+			"desc": "Clear 100 lines total"
+		},
+		"line_veteran": {
+			"title": "Veteran Clearer",
+			"desc": "Clear 500 lines total"
+		},
+		"perfect_clear": {
+			"title": "Perfect Clear",
+			"desc": "Clear 4 lines at once"
+		},
+		"mission_starter": {
+			"title": "Mission Starter",
+			"desc": "Complete 10 missions"
+		},
+		"mission_hunter": {
+			"title": "Mission Hunter",
+			"desc": "Complete 50 missions"
+		},
+		"perfect_run": {
+			"title": "Perfect Run",
+			"desc": "Complete all 3 missions in one run"
+		},
+		"fire_conqueror": {
+			"title": "Fire Conqueror",
+			"desc": "Complete the Land of Fire"
+		},
+		"forest_survivor": {
+			"title": "Forest Survivor",
+			"desc": "Survive the Black Forest"
+		},
+		"final_victory": {
+			"title": "Final Victory",
+			"desc": "Defeat the Dark Wizard"
+		},
+		"speedrunner": {
+			"title": "Speedrunner",
+			"desc": "Complete a level in under 60 seconds"
+		},
+		"no_powers": {
+			"title": "Pure Skill",
+			"desc": "Defeat the Dark Wizard without using powers"
+		}
+	}
 }

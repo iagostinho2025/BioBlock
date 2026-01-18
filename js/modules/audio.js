@@ -36,6 +36,9 @@ export class AudioSystem {
             wow: 'assets/sounds/voice_wow.mp3',
             holycow: 'assets/sounds/voice_holycow.mp3',
             unreal: 'assets/sounds/voice_unreal.mp3',
+
+            // --- MISSÕES ---
+            mission_complete: 'assets/sounds/mission_complete.mp3',
             
             // --- EFEITOS DE ATAQUE DOS BOSSES ---
             boss_hit_1: 'assets/sounds/boss_hit_1.mp3',
@@ -195,6 +198,11 @@ export class AudioSystem {
     playVictory() {
         // Usa o clear mais forte como base se não tiver um arquivo específico
         this.playClear(4);
+    }
+
+    // --- MISSÃO COMPLETADA ---
+    playMissionComplete() {
+        this.playSound('mission_complete', () => this.playTone(880, 'sine', 0.5));
     }
 
     // --- NOVOS PODERES DE HERÓI ---
